@@ -26,6 +26,18 @@
 - `bin/`
   - repo-owned wrappers that mirror the lean shell wrappers
 
+## Codex Adapter Variants
+
+- `codex`
+  - shells out to `codex exec` for each request
+- `codex-app-server`
+  - starts one long-lived `codex app-server` subprocess and speaks stdio JSON-RPC to it
+  - creates an ephemeral Codex thread for each request, then unsubscribes when the turn completes
+  - currently serializes generations through one shared client to keep transport state simple
+  - uses repo-owned wrapper [bin/qodex-app-server](/Users/jona/Documents/projects/local-llms/bin/qodex-app-server) so app-server requests run with the minimal Codex home by default
+
+`codex-app-server` exists to reduce repeated Codex startup cost without changing the public HTTP API.
+
 ## Adapter Contract
 
 Each adapter implements:
@@ -53,6 +65,17 @@ If a request explicitly passes `providerModel`, that override wins and adapter-l
 - each request gets a request-scoped logger
 - subprocesses log start, completion, timeout, and kill escalation
 - subprocess timeout is a hard budget, including Gemini fallback attempts
+- the Codex app-server client reuses one child process, buffers stderr for error reporting, and tears the child down on server close
+
+## Codex App-Server Defaults
+
+The current `codex-app-server` transport is intentionally conservative:
+
+- approval policy: `never`
+- sandbox: `read-only`
+- working directory: `/tmp`
+
+Those defaults live in the adapter implementation, not the public API. Keep that split unless there is a clear product reason to expose more provider-specific knobs.
 
 ## Current Non-Goals
 

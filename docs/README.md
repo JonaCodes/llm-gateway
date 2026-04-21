@@ -12,6 +12,17 @@ This project is a small local HTTP gateway over private LLM backends. The public
   - `codex-app-server`
   - `gemini`
 
+## Model Aliases
+
+- `codex`
+  - one subprocess per request via `codex exec`
+- `codex-app-server`
+  - long-lived `codex app-server` transport for lower repeated-request startup cost
+  - same public API shape as `codex`
+  - current implementation runs one generation at a time through the shared app-server client
+- `gemini`
+  - Gemini CLI adapter with fallback-model retry support
+
 The request shape is:
 
 ```json
@@ -20,6 +31,17 @@ The request shape is:
   "systemPrompt": "optional",
   "userPrompt": "required",
   "providerModel": "optional override"
+}
+```
+
+For repeated Codex-backed requests, prefer `codex-app-server`:
+
+```json
+{
+  "model": "codex-app-server",
+  "systemPrompt": "optional",
+  "userPrompt": "required",
+  "providerModel": "gpt-5.2"
 }
 ```
 
@@ -54,6 +76,8 @@ node dist/src/server.js --skip-gemini
 node dist/src/server.js --skip-codex
 node dist/src/server.js --skip-codex-app-server
 ```
+
+`codex-app-server` expects a Codex CLI with `codex app-server` support on `PATH`.
 
 ## Where To Look
 
