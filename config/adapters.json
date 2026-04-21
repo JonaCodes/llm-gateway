@@ -1,0 +1,28 @@
+{
+  "adapters": {
+    "codex": {
+      "alias": "codex",
+      "adapter": "codex",
+      "enabled": true,
+      "defaultProviderModel": "gpt-5.2",
+      "fallbackProviderModels": [],
+      "command": {
+        "program": "bin/qodex",
+        "args": []
+      }
+    },
+    "gemini": {
+      "alias": "gemini",
+      "adapter": "gemini",
+      "enabled": true,
+      "defaultProviderModel": "gemini-3.1-flash-lite-preview",
+      "fallbackProviderModels": [
+        "gemini-3-flash-preview"
+      ],
+      "command": {
+        "program": "bin/qgemini",
+        "args": []
+      }
+    }
+  }
+}

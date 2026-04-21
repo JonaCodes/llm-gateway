@@ -1,0 +1,31 @@
+#!/usr/bin/env zsh
+
+set -euo pipefail
+
+readonly HEALTHCHECK_FLAG="--healthcheck"
+readonly DEFAULT_GEMINI_HOME="$HOME/.gemini-min-home"
+readonly GEMINI_SUBDIR=".gemini"
+readonly SYSTEM_FILE_NAME="system.md"
+
+fail() {
+  print -u2 -- "$1"
+  exit 1
+}
+
+if [[ "${1:-}" == "$HEALTHCHECK_FLAG" ]]; then
+  command -v gemini >/dev/null 2>&1 || fail "gemini executable not found on PATH"
+
+  gemini_home="${GEMINI_MIN_HOME:-$DEFAULT_GEMINI_HOME}"
+  gemini_config_dir="$gemini_home/$GEMINI_SUBDIR"
+  gemini_system_md="${GEMINI_SYSTEM_MD:-$gemini_config_dir/$SYSTEM_FILE_NAME}"
+
+  [[ -d "$gemini_home" ]] || fail "Gemini home directory not found: $gemini_home"
+  [[ -d "$gemini_config_dir" ]] || fail "Gemini config directory not found: $gemini_config_dir"
+  [[ -f "$gemini_system_md" ]] || fail "Gemini system prompt file not found: $gemini_system_md"
+  exit 0
+fi
+
+gemini_home="${GEMINI_MIN_HOME:-$DEFAULT_GEMINI_HOME}"
+export HOME="$gemini_home"
+export GEMINI_SYSTEM_MD="${GEMINI_SYSTEM_MD:-$gemini_home/$GEMINI_SUBDIR/$SYSTEM_FILE_NAME}"
+exec gemini -e none "$@"
