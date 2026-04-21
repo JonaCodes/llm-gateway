@@ -19,6 +19,17 @@ const adapterConfigs = {
       args: []
     }
   },
+  "codex-app-server": {
+    alias: "codex-app-server",
+    adapter: "codex-app-server",
+    enabled: true,
+    defaultProviderModel: "gpt-5.2",
+    fallbackProviderModels: [],
+    command: {
+      program: "/tmp/qodex-app-server",
+      args: []
+    }
+  },
   gemini: {
     alias: "gemini",
     adapter: "gemini",
@@ -54,6 +65,19 @@ test("resolveEffectiveModelSelection uses adapter default model", () => {
 
   assert.equal(selection.providerModel, "gpt-5.2");
   assert.equal(selection.adapterId, "codex");
+});
+
+test("resolveEffectiveModelSelection uses codex app-server default model", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "codex-app-server",
+      userPrompt: "classify this"
+    },
+    { adapterConfigs }
+  );
+
+  assert.equal(selection.providerModel, "gpt-5.2");
+  assert.equal(selection.adapterId, "codex-app-server");
 });
 
 test("resolveEffectiveModelSelection prefers request override", () => {
@@ -97,9 +121,9 @@ test("resolveEffectiveModelSelection suppresses fallback models for explicit ove
 });
 
 test("parseStartupOptions reads adapter skip flags", () => {
-  const options = parseStartupOptions(["--skip-codex"]);
+  const options = parseStartupOptions(["--skip-codex", "--skip-codex-app-server"]);
 
-  assert.deepEqual(options.skipAliases, ["codex"]);
+  assert.deepEqual(options.skipAliases, ["codex", "codex-app-server"]);
 });
 
 test("loadRuntimeConfig falls back to defaults", () => {

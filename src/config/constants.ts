@@ -29,6 +29,7 @@ export const ERROR_CODE_INTERNAL = "internal_error";
 
 export const ADAPTER_SKIP_FLAGS = {
   codex: "--skip-codex",
+  "codex-app-server": "--skip-codex-app-server",
   gemini: "--skip-gemini"
 } as const;
 

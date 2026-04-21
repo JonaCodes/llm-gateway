@@ -36,6 +36,7 @@ export interface Adapter {
   readonly id: AdapterId;
   checkAvailability(): Promise<AdapterAvailability>;
   generate(input: AdapterGenerateInput): Promise<AdapterGenerateResult>;
+  close?(): Promise<void>;
 }
 
 export interface EffectiveModelSelection {

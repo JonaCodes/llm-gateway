@@ -18,6 +18,10 @@ export async function createServer(options: CreateServerOptions) {
     }
   });
 
+  server.addHook("onClose", async () => {
+    await options.adapterRegistry.close();
+  });
+
   await registerRoutes(server, {
     runtimeConfig: options.runtimeConfig,
     adapterConfigs: options.adapterConfigs,

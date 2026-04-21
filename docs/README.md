@@ -9,6 +9,7 @@ This project is a small local HTTP gateway over private LLM backends. The public
 - `GET /health`
 - Public models:
   - `codex`
+  - `codex-app-server`
   - `gemini`
 
 The request shape is:
@@ -51,6 +52,7 @@ pnpm build
 pnpm test
 node dist/src/server.js --skip-gemini
 node dist/src/server.js --skip-codex
+node dist/src/server.js --skip-codex-app-server
 ```
 
 ## Where To Look

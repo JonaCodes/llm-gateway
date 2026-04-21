@@ -6,7 +6,7 @@
 2. Request body is validated in [src/http/schemas.ts](/Users/jona/Documents/projects/local-llms/src/http/schemas.ts).
 3. The router resolves the public model alias to an adapter and effective provider model in [src/core/router.ts](/Users/jona/Documents/projects/local-llms/src/core/router.ts).
 4. The prompt is assembled in [src/core/prompt.ts](/Users/jona/Documents/projects/local-llms/src/core/prompt.ts).
-5. The adapter shells out through [src/utils/process.ts](/Users/jona/Documents/projects/local-llms/src/utils/process.ts).
+5. The adapter either shells out through [src/utils/process.ts](/Users/jona/Documents/projects/local-llms/src/utils/process.ts) or uses a provider-specific persistent transport.
 6. The route normalizes the result into the public response shape in [src/http/routes.ts](/Users/jona/Documents/projects/local-llms/src/http/routes.ts).
 
 ## Key Modules
@@ -17,6 +17,8 @@
   - shared domain types, prompt assembly, adapter registry, alias routing
 - `src/adapters/codex`
   - Codex execution and JSONL parsing
+- `src/adapters/codex-app-server`
+  - persistent Codex app-server transport over stdio JSON-RPC
 - `src/adapters/gemini`
   - Gemini plain-text execution and fallback-model retry logic
 - `src/config`
@@ -57,5 +59,4 @@ If a request explicitly passes `providerModel`, that override wins and adapter-l
 - streaming responses
 - chat/messages array support
 - provider SDK compatibility
-- persistent worker pools
-- Codex app-server integration
+- Codex seed-thread and fork reuse in the public API

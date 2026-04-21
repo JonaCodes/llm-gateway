@@ -11,6 +11,17 @@
         "args": []
       }
     },
+    "codex-app-server": {
+      "alias": "codex-app-server",
+      "adapter": "codex-app-server",
+      "enabled": true,
+      "defaultProviderModel": "gpt-5.2",
+      "fallbackProviderModels": [],
+      "command": {
+        "program": "bin/qodex-app-server",
+        "args": []
+      }
+    },
     "gemini": {
       "alias": "gemini",
       "adapter": "gemini",

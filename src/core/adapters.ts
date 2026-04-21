@@ -1,5 +1,6 @@
 import type { Adapter, AdapterAlias, AdapterAvailability, ResolvedAdapterConfig } from "./types.js";
 import { CodexAdapter } from "../adapters/codex/index.js";
+import { CodexAppServerAdapter } from "../adapters/codex-app-server/index.js";
 import { GeminiAdapter } from "../adapters/gemini/index.js";
 import { ADAPTER_SKIP_FLAGS, ERROR_CODE_STARTUP } from "../config/constants.js";
 import { AppError } from "./errors.js";
@@ -7,6 +8,7 @@ import { AppError } from "./errors.js";
 export interface AdapterRegistry {
   readonly adapters: ReadonlyMap<AdapterAlias, Adapter>;
   readonly health: () => Promise<AdapterAvailability[]>;
+  readonly close: () => Promise<void>;
 }
 
 export function buildAdapterRegistry(
@@ -17,6 +19,10 @@ export function buildAdapterRegistry(
 
   if (adapterConfigs.codex.enabled && !skipAliases.includes(adapterConfigs.codex.alias)) {
     adapters.set("codex", new CodexAdapter(adapterConfigs.codex));
+  }
+
+  if (adapterConfigs["codex-app-server"].enabled && !skipAliases.includes(adapterConfigs["codex-app-server"].alias)) {
+    adapters.set("codex-app-server", new CodexAppServerAdapter(adapterConfigs["codex-app-server"]));
   }
 
   if (adapterConfigs.gemini.enabled && !skipAliases.includes(adapterConfigs.gemini.alias)) {
@@ -57,6 +63,11 @@ export function buildAdapterRegistry(
       }
 
       return results;
+    },
+    close: async () => {
+      for (const adapter of adapters.values()) {
+        await adapter.close?.();
+      }
     }
   };
 }
