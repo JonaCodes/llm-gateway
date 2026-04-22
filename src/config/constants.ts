@@ -30,7 +30,9 @@ export const ERROR_CODE_INTERNAL = "internal_error";
 export const ADAPTER_SKIP_FLAGS = {
   codex: "--skip-codex",
   "codex-app-server": "--skip-codex-app-server",
-  gemini: "--skip-gemini"
+  gemini: "--skip-gemini",
+  "gemma4-e2b": "--skip-gemma4-e2b",
+  "gemma4-e4b": "--skip-gemma4-e4b"
 } as const;
 
 export const RUNTIME_ENV_KEYS = {

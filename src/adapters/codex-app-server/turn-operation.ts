@@ -102,6 +102,7 @@ export function handleTurnOperationNotification(
         inputTokens: operation.inputTokens,
         cachedInputTokens: operation.cachedInputTokens,
         outputText: operation.latestAssistantText ?? operation.streamedText,
+        thinkingText: null,
         outputTokens: operation.outputTokens
       });
       return;

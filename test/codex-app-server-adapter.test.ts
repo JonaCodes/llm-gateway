@@ -13,7 +13,8 @@ const adapterConfig: ResolvedAdapterConfig = {
   enabled: true,
   defaultProviderModel: "gpt-5.2",
   fallbackProviderModels: [],
-  command: {
+  transport: {
+    kind: "command",
     program: "/tmp/qodex-app-server",
     args: []
   }
@@ -50,15 +51,18 @@ test("stale internal seed is recreated and the request succeeds", async () => {
       inputTokens: 10,
       cachedInputTokens: 8,
       outputText: "ok",
+      thinkingText: null,
       outputTokens: 2
     };
   };
 
-  const result = await adapter.generateWithSystemPrompt({
+  const result = await adapter.generate({
+    userPrompt: "document payload",
     systemPrompt: "seed prompt",
-    prompt: "document payload",
     providerModel: "gpt-5.2",
+    fallbackProviderModels: [],
     timeoutMs: 1000,
+    options: { thinking: false },
     logger: consoleLogger
   });
 
@@ -83,24 +87,29 @@ test("clearing process-local seeds causes the same prompt to be re-seeded on the
     inputTokens: 10,
     cachedInputTokens: 8,
     outputText: "ok",
+    thinkingText: null,
     outputTokens: 2
   });
 
-  await adapter.generateWithSystemPrompt({
+  await adapter.generate({
+    userPrompt: "document payload",
     systemPrompt: "seed prompt",
-    prompt: "document payload",
     providerModel: "gpt-5.2",
+    fallbackProviderModels: [],
     timeoutMs: 1000,
+    options: { thinking: false },
     logger: consoleLogger
   });
 
   adapter.clearSeeds();
 
-  await adapter.generateWithSystemPrompt({
+  await adapter.generate({
+    userPrompt: "document payload",
     systemPrompt: "seed prompt",
-    prompt: "document payload",
     providerModel: "gpt-5.2",
+    fallbackProviderModels: [],
     timeoutMs: 1000,
+    options: { thinking: false },
     logger: consoleLogger
   });
 

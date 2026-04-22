@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface as ReadLineInterface } from "node:readline";
 
 import { DEFAULT_HEALTHCHECK_TIMEOUT_MS } from "../../config/constants.js";
+import { requireCommandTransport } from "../../config/adapters.js";
 import type { AdapterGenerateResult, ResolvedAdapterConfig } from "../../core/types.js";
 import type { AppLogger } from "../../utils/logger.js";
 import {
@@ -133,7 +134,8 @@ export class CodexAppServerClient {
   }
 
   private async start(logger?: AppLogger): Promise<void> {
-    const child = spawn(this.config.command.program, [...this.config.command.args], {
+    const transport = requireCommandTransport(this.config);
+    const child = spawn(transport.program, [...transport.args], {
       stdio: ["pipe", "pipe", "pipe"]
     });
 
@@ -171,7 +173,7 @@ export class CodexAppServerClient {
       onProcessExit: this.options.onProcessExit
     });
 
-    logger?.info({ program: this.config.command.program }, "Starting Codex app-server");
+    logger?.info({ program: transport.program }, "Starting Codex app-server");
 
     try {
       await this.request<InitializeResponse>(

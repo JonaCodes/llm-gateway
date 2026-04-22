@@ -14,7 +14,8 @@ const adapterConfigs = {
     enabled: true,
     defaultProviderModel: "gpt-5.2",
     fallbackProviderModels: [],
-    command: {
+    transport: {
+      kind: "command",
       program: "/tmp/qodex",
       args: []
     }
@@ -25,7 +26,8 @@ const adapterConfigs = {
     enabled: true,
     defaultProviderModel: "gpt-5.2",
     fallbackProviderModels: [],
-    command: {
+    transport: {
+      kind: "command",
       program: "/tmp/qodex-app-server",
       args: []
     }
@@ -36,9 +38,34 @@ const adapterConfigs = {
     enabled: true,
     defaultProviderModel: "gemini-3.1-flash-lite-preview",
     fallbackProviderModels: ["gemini-3-flash-preview"],
-    command: {
+    transport: {
+      kind: "command",
       program: "/tmp/qgemini",
       args: []
+    }
+  },
+  "gemma4-e2b": {
+    alias: "gemma4-e2b",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e2b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "10m"
+    }
+  },
+  "gemma4-e4b": {
+    alias: "gemma4-e4b",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e4b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "10m"
     }
   }
 } as const;
@@ -106,6 +133,19 @@ test("resolveEffectiveModelSelection uses configured Gemini default and fallback
   assert.deepEqual(selection.fallbackProviderModels, ["gemini-3-flash-preview"]);
 });
 
+test("resolveEffectiveModelSelection maps Gemma alias to Ollama adapter", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "gemma4-e2b",
+      userPrompt: "classify this"
+    },
+    { adapterConfigs }
+  );
+
+  assert.equal(selection.adapterId, "ollama");
+  assert.equal(selection.providerModel, "gemma4:e2b");
+});
+
 test("resolveEffectiveModelSelection suppresses fallback models for explicit overrides", () => {
   const selection = resolveEffectiveModelSelection(
     {
@@ -121,9 +161,9 @@ test("resolveEffectiveModelSelection suppresses fallback models for explicit ove
 });
 
 test("parseStartupOptions reads adapter skip flags", () => {
-  const options = parseStartupOptions(["--skip-codex", "--skip-codex-app-server"]);
+  const options = parseStartupOptions(["--skip-codex", "--skip-gemma4-e2b"]);
 
-  assert.deepEqual(options.skipAliases, ["codex", "codex-app-server"]);
+  assert.deepEqual(options.skipAliases, ["codex", "gemma4-e2b"]);
 });
 
 test("loadRuntimeConfig falls back to defaults", () => {
@@ -163,6 +203,7 @@ test("parseCodexResult extracts output and token usage from jsonl", () => {
   assert.equal(result.inputTokens, 123);
   assert.equal(result.cachedInputTokens, null);
   assert.equal(result.outputTokens, 9);
+  assert.equal(result.thinkingText, null);
 });
 
 test("parseCodexResult extracts output from agent_message text field", () => {
@@ -190,6 +231,7 @@ test("parseCodexResult extracts output from agent_message text field", () => {
   assert.equal(result.inputTokens, 5203);
   assert.equal(result.cachedInputTokens, null);
   assert.equal(result.outputTokens, 12);
+  assert.equal(result.thinkingText, null);
 });
 
 test("shouldRetryGeminiWithFallback detects retryable quota-style failures", () => {

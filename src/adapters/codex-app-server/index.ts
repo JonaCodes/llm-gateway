@@ -1,5 +1,7 @@
 import { ERROR_CODE_ADAPTER_EXECUTION } from "../../config/constants.js";
+import { isCommandTransport } from "../../config/adapters.js";
 import { AppError } from "../../core/errors.js";
+import { buildPrompt } from "../../core/prompt.js";
 import type {
   Adapter,
   AdapterAvailability,
@@ -10,24 +12,7 @@ import type {
 import { CodexAppServerClient } from "./client.js";
 import { createSeedId, createSeedMetadata, updateSeedMetadata, type SeedMetadata } from "./seeds.js";
 
-export interface CodexAppServerPromptCachingCapable {
-  generateWithSystemPrompt(input: {
-    readonly systemPrompt: string;
-    readonly prompt: string;
-    readonly providerModel: string;
-    readonly timeoutMs: number;
-    readonly logger: AdapterGenerateInput["logger"];
-  }): Promise<AdapterGenerateResult>;
-}
-
-export function isCodexAppServerPromptCachingCapable(adapter: Adapter): adapter is Adapter & CodexAppServerPromptCachingCapable {
-  return (
-    "generateWithSystemPrompt" in adapter &&
-    typeof adapter.generateWithSystemPrompt === "function"
-  );
-}
-
-export class CodexAppServerAdapter implements Adapter, CodexAppServerPromptCachingCapable {
+export class CodexAppServerAdapter implements Adapter {
   readonly id = "codex-app-server";
 
   private readonly client: CodexAppServerClient;
@@ -35,6 +20,10 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerPromptCachi
   private readonly seeds = new Map<string, SeedMetadata>();
 
   constructor(private readonly config: ResolvedAdapterConfig) {
+    if (!isCommandTransport(config.transport)) {
+      throw new Error(`Adapter '${config.alias}' requires command transport`);
+    }
+
     this.client = new CodexAppServerClient(config, {
       onProcessExit: () => {
         this.clearSeeds();
@@ -73,30 +62,29 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerPromptCachi
       });
     }
 
-    return this.enqueue(() =>
-      this.client.generate(input.prompt, input.providerModel as string, input.timeoutMs, input.logger)
-    );
-  }
+    const providerModel = input.providerModel;
 
-  async generateWithSystemPrompt(input: {
-    readonly systemPrompt: string;
-    readonly prompt: string;
-    readonly providerModel: string;
-    readonly timeoutMs: number;
-    readonly logger: AdapterGenerateInput["logger"];
-  }): Promise<AdapterGenerateResult> {
     return this.enqueue(async () => {
-      const seedId = createSeedId(input.systemPrompt, input.providerModel);
+      if (!input.systemPrompt || input.systemPrompt.trim() === "") {
+        return this.client.generate(
+          buildPrompt(input.userPrompt, input.systemPrompt),
+          providerModel,
+          input.timeoutMs,
+          input.logger
+        );
+      }
+
+      const seedId = createSeedId(input.systemPrompt, providerModel);
       let seed = this.seeds.get(seedId) ?? null;
 
       if (!seed) {
-        seed = await this.ensureSeedMetadata(seedId, input.systemPrompt, input.providerModel, input.timeoutMs, input.logger);
+        seed = await this.ensureSeedMetadata(seedId, input.systemPrompt, providerModel, input.timeoutMs, input.logger);
       }
 
       try {
         return await this.client.generateFromSeed(
           seed.threadId,
-          input.prompt,
+          input.userPrompt,
           seed.providerModel,
           input.timeoutMs,
           input.logger
@@ -110,14 +98,14 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerPromptCachi
         const recreatedSeed = await this.ensureSeedMetadata(
           seedId,
           input.systemPrompt,
-          input.providerModel,
+          providerModel,
           input.timeoutMs,
           input.logger
         );
 
         return this.client.generateFromSeed(
           recreatedSeed.threadId,
-          input.prompt,
+          input.userPrompt,
           recreatedSeed.providerModel,
           input.timeoutMs,
           input.logger

@@ -1,5 +1,7 @@
 import { CODEX_JSON_ARGUMENT, DEFAULT_HEALTHCHECK_TIMEOUT_MS, ERROR_CODE_ADAPTER_EXECUTION, HEALTHCHECK_ARGUMENT, PROVIDER_MODEL_ARGUMENT } from "../../config/constants.js";
+import { requireCommandTransport } from "../../config/adapters.js";
 import { AppError } from "../../core/errors.js";
+import { buildPrompt } from "../../core/prompt.js";
 import type { Adapter, AdapterAvailability, AdapterGenerateInput, AdapterGenerateResult, ResolvedAdapterConfig } from "../../core/types.js";
 import type { ExecuteCommandResult } from "../../utils/process.js";
 import { executeCommand } from "../../utils/process.js";
@@ -8,10 +10,12 @@ import { parseCodexResult } from "./parser.js";
 async function runHealthcheck(
   config: ResolvedAdapterConfig
 ): Promise<ExecuteCommandResult | Error> {
+  const transport = requireCommandTransport(config);
+
   try {
     return await executeCommand({
-      program: config.command.program,
-      args: [...config.command.args, HEALTHCHECK_ARGUMENT],
+      program: transport.program,
+      args: [...transport.args, HEALTHCHECK_ARGUMENT],
       timeoutMs: DEFAULT_HEALTHCHECK_TIMEOUT_MS,
       logName: "codex-healthcheck"
     });
@@ -66,14 +70,15 @@ export class CodexAdapter implements Adapter {
       });
     }
 
+    const transport = requireCommandTransport(this.config);
     const result = await executeCommand({
-      program: this.config.command.program,
+      program: transport.program,
       args: [
-        ...this.config.command.args,
+        ...transport.args,
         CODEX_JSON_ARGUMENT,
         PROVIDER_MODEL_ARGUMENT,
         input.providerModel,
-        input.prompt
+        buildPrompt(input.userPrompt, input.systemPrompt)
       ],
       timeoutMs: input.timeoutMs,
       logger: input.logger,

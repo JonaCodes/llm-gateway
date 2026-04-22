@@ -5,10 +5,11 @@
 1. Fastify receives `POST /v1/generate`.
 2. Request body is validated in [src/http/schemas.ts](/Users/jona/Documents/projects/local-llms/src/http/schemas.ts).
 3. The router resolves the public model alias to an adapter and effective provider model in [src/core/router.ts](/Users/jona/Documents/projects/local-llms/src/core/router.ts).
-4. For normal requests, the prompt is assembled in [src/core/prompt.ts](/Users/jona/Documents/projects/local-llms/src/core/prompt.ts).
-5. For `codex-app-server` requests with a non-empty `systemPrompt`, the route bypasses generic prompt assembly and lets the adapter reuse an internal seed derived from `systemPrompt + providerModel`, then sends only the per-request user payload into a forked child thread.
-6. The adapter either shells out through [src/utils/process.ts](/Users/jona/Documents/projects/local-llms/src/utils/process.ts) or uses a provider-specific persistent transport.
-7. The route normalizes the result into the public response shape in [src/http/routes.ts](/Users/jona/Documents/projects/local-llms/src/http/routes.ts).
+4. The route passes structured input (`userPrompt`, optional `systemPrompt`, optional `options`) into the adapter.
+5. Prompt-based adapters assemble plain text internally through [src/core/prompt.ts](/Users/jona/Documents/projects/local-llms/src/core/prompt.ts), while chat-native adapters keep system/user roles structured.
+6. `codex-app-server` decides inside the adapter whether to use the normal one-off path or its seeded system-prompt reuse path.
+7. The adapter either shells out through [src/utils/process.ts](/Users/jona/Documents/projects/local-llms/src/utils/process.ts) or uses a provider-specific persistent/HTTP transport.
+8. The route normalizes the result into the public response shape in [src/http/routes.ts](/Users/jona/Documents/projects/local-llms/src/http/routes.ts).
 
 ## Key Modules
 
@@ -25,6 +26,8 @@
   - `thread-client.ts` owns thread/turn RPC helpers; `process-lifecycle.ts` owns child-process error/close handling
 - `src/adapters/gemini`
   - Gemini plain-text execution and fallback-model retry logic
+- `src/adapters/ollama`
+  - Ollama HTTP client and local chat-model adapter for Gemma 4
 - `src/config`
   - typed loading of checked-in adapter config and runtime flags
 - `bin/`
@@ -52,7 +55,7 @@ Each adapter implements:
 
 The server should only know about the shared adapter interface. Provider-specific details stay inside the adapter directory.
 
-`codex-app-server` also exposes a narrow prompt-caching capability used only when `/v1/generate` receives a non-empty `systemPrompt` for that model. That capability is intentionally not part of the base adapter contract.
+`generate()` now receives structured prompt input plus normalized request options. That keeps the route generic and lets command-backed adapters and chat-native adapters differ internally without changing the public HTTP API.
 
 ## Config Shape
 
@@ -62,7 +65,9 @@ The server should only know about the shared adapter interface. Provider-specifi
 - adapter id
 - default provider model
 - fallback provider models
-- wrapper command
+- transport config
+
+Aliases and adapter ids are intentionally decoupled. Multiple public aliases can point at the same adapter implementation.
 
 If a request explicitly passes `providerModel`, that override wins and adapter-level fallback models are disabled for that request.
 
@@ -73,6 +78,7 @@ If a request explicitly passes `providerModel`, that override wins and adapter-l
 - subprocesses log start, completion, timeout, and kill escalation
 - subprocess timeout is a hard budget, including Gemini fallback attempts
 - the Codex app-server client reuses one child process, buffers stderr for error reporting, and tears the child down on server close
+- the Ollama client uses direct local HTTP calls with per-request timeouts and alias-specific startup health checks
 
 ## Codex App-Server Prompt Cache Flow
 
@@ -85,6 +91,17 @@ If a request explicitly passes `providerModel`, that override wins and adapter-l
 - requests with no `systemPrompt` stay on the normal one-off `codex-app-server` path
 - internal seed mappings are runtime-only, tied to the current live app-server process, and are lost on process restart
 - if a stored seed proves stale during `thread/fork`, the adapter drops that mapping, recreates the seed from the current request, and retries once
+
+## Gemma 4 On Ollama
+
+- public aliases: `gemma4-e2b`, `gemma4-e4b`
+- runtime: Ollama local HTTP API
+- thinking is a request option (`options.thinking`), not part of the model name
+- no-thinking is the default when `options.thinking` is omitted
+- response includes `thinkingText`
+- v1 cache scope is model residency only via Ollama `keep_alive`
+- Gemma requests return `cachedInputTokens: null`
+- for the no-thinking path, `thinkingText` should be `null`
 
 ## Codex App-Server Defaults
 

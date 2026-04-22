@@ -1,16 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { isCodexAppServerPromptCachingCapable, type CodexAppServerPromptCachingCapable } from "../adapters/codex-app-server/index.js";
 import {
   CONTENT_TYPE_JSON,
-  ERROR_CODE_ADAPTER_UNAVAILABLE,
-  ERROR_CODE_INTERNAL,
   ERROR_CODE_VALIDATION,
   GENERATE_ROUTE,
   HEALTH_ROUTE
 } from "../config/constants.js";
 import type { RuntimeConfig } from "../config/runtime.js";
-import { buildPrompt } from "../core/prompt.js";
 import { AppError } from "../core/errors.js";
 import { requireAdapter, resolveEffectiveModelSelection } from "../core/router.js";
 import type { AdapterRegistry } from "../core/adapters.js";
@@ -23,19 +19,6 @@ interface RegisterRoutesOptions {
   readonly adapterRegistry: AdapterRegistry;
   readonly adapterConfigs: Record<AdapterAlias, ResolvedAdapterConfig>;
   readonly runtimeConfig: RuntimeConfig;
-}
-
-function getCodexAppServerPromptCachingAdapter(options: RegisterRoutesOptions): CodexAppServerPromptCachingCapable {
-  const adapter = options.adapterRegistry.adapters.get("codex-app-server");
-
-  if (!adapter || !isCodexAppServerPromptCachingCapable(adapter)) {
-    throw new AppError("Adapter 'codex-app-server' is unavailable", {
-      statusCode: 503,
-      code: ERROR_CODE_ADAPTER_UNAVAILABLE
-    });
-  }
-
-  return adapter;
 }
 
 export async function registerRoutes(server: FastifyInstance, options: RegisterRoutesOptions): Promise<void> {
@@ -73,74 +56,26 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
       requestLogger.info(
         {
           hasSystemPrompt: Boolean(body.systemPrompt && body.systemPrompt.trim() !== ""),
-          hasProviderModelOverride: Boolean(body.providerModel && body.providerModel.trim() !== "")
+          hasProviderModelOverride: Boolean(body.providerModel && body.providerModel.trim() !== ""),
+          thinking: body.options?.thinking ?? false
         },
         "Received generation request"
       );
-
-      const hasSystemPrompt = Boolean(body.systemPrompt && body.systemPrompt.trim() !== "");
-      if (body.model === "codex-app-server" && hasSystemPrompt) {
-        const adapter = getCodexAppServerPromptCachingAdapter(options);
-        const adapterConfig = options.adapterConfigs["codex-app-server"];
-        const providerModel = body.providerModel?.trim() || adapterConfig.defaultProviderModel;
-
-        if (!providerModel) {
-          throw new AppError("Codex app-server requires an explicit provider model", {
-            statusCode: 500,
-            code: ERROR_CODE_INTERNAL,
-            details: { adapter: "codex-app-server" }
-          });
-        }
-
-        const startedAt = performance.now();
-        const result = await adapter.generateWithSystemPrompt({
-          systemPrompt: body.systemPrompt as string,
-          prompt: body.userPrompt,
-          providerModel,
-          timeoutMs: options.runtimeConfig.requestTimeoutMs,
-          logger: requestLogger.child({
-            adapter: "codex-app-server",
-            providerModel
-          })
-        });
-        const durationMs = Math.round(performance.now() - startedAt);
-
-        requestLogger.info(
-          {
-            adapter: "codex-app-server",
-            providerModel,
-            durationMs,
-            inputTokens: result.inputTokens,
-            cachedInputTokens: result.cachedInputTokens,
-            outputTokens: result.outputTokens
-          },
-          "Generation request completed"
-        );
-
-        return reply.type(CONTENT_TYPE_JSON).send({
-          id: requestId,
-          model: "codex-app-server",
-          providerModel,
-          inputTokens: result.inputTokens,
-          cachedInputTokens: result.cachedInputTokens,
-          outputText: result.outputText,
-          outputTokens: result.outputTokens,
-          durationMs,
-          adapter: "codex-app-server"
-        });
-      }
 
       const selection = resolveEffectiveModelSelection(body, {
         adapterConfigs: options.adapterConfigs
       });
       const adapter = requireAdapter(options.adapterRegistry.adapters, selection);
-      const prompt = buildPrompt(body.userPrompt, body.systemPrompt);
       const startedAt = performance.now();
       const result = await adapter.generate({
-        prompt,
+        userPrompt: body.userPrompt,
+        systemPrompt: body.systemPrompt,
         providerModel: selection.providerModel,
         fallbackProviderModels: selection.fallbackProviderModels,
         timeoutMs: options.runtimeConfig.requestTimeoutMs,
+        options: {
+          thinking: body.options?.thinking ?? false
+        },
         logger: requestLogger.child({
           adapter: selection.adapterId,
           providerModel: selection.providerModel
@@ -167,6 +102,7 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
         inputTokens: result.inputTokens,
         cachedInputTokens: result.cachedInputTokens,
         outputText: result.outputText,
+        thinkingText: result.thinkingText,
         outputTokens: result.outputTokens,
         durationMs,
         adapter: selection.adapterId

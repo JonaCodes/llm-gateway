@@ -6,7 +6,8 @@
       "enabled": true,
       "defaultProviderModel": "gpt-5.2",
       "fallbackProviderModels": [],
-      "command": {
+      "transport": {
+        "kind": "command",
         "program": "bin/qodex",
         "args": []
       }
@@ -17,7 +18,8 @@
       "enabled": true,
       "defaultProviderModel": "gpt-5.2",
       "fallbackProviderModels": [],
-      "command": {
+      "transport": {
+        "kind": "command",
         "program": "bin/qodex-app-server",
         "args": []
       }
@@ -30,9 +32,34 @@
       "fallbackProviderModels": [
         "gemini-3-flash-preview"
       ],
-      "command": {
+      "transport": {
+        "kind": "command",
         "program": "bin/qgemini",
         "args": []
+      }
+    },
+    "gemma4-e2b": {
+      "alias": "gemma4-e2b",
+      "adapter": "ollama",
+      "enabled": true,
+      "defaultProviderModel": "gemma4:e2b",
+      "fallbackProviderModels": [],
+      "transport": {
+        "kind": "http",
+        "baseUrl": "http://127.0.0.1:11434",
+        "defaultKeepAlive": "10m"
+      }
+    },
+    "gemma4-e4b": {
+      "alias": "gemma4-e4b",
+      "adapter": "ollama",
+      "enabled": true,
+      "defaultProviderModel": "gemma4:e4b",
+      "fallbackProviderModels": [],
+      "transport": {
+        "kind": "http",
+        "baseUrl": "http://127.0.0.1:11434",
+        "defaultKeepAlive": "10m"
       }
     }
   }

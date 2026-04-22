@@ -1,5 +1,7 @@
 import { DEFAULT_HEALTHCHECK_TIMEOUT_MS, ERROR_CODE_ADAPTER_EXECUTION, GEMINI_PROMPT_ARGUMENT, HEALTHCHECK_ARGUMENT, PROVIDER_MODEL_ARGUMENT } from "../../config/constants.js";
+import { requireCommandTransport } from "../../config/adapters.js";
 import { AppError } from "../../core/errors.js";
+import { buildPrompt } from "../../core/prompt.js";
 import type { Adapter, AdapterAvailability, AdapterGenerateInput, AdapterGenerateResult, ResolvedAdapterConfig } from "../../core/types.js";
 import type { ExecuteCommandResult } from "../../utils/process.js";
 import { executeCommand } from "../../utils/process.js";
@@ -8,10 +10,12 @@ import { shouldRetryGeminiWithFallback } from "./retry.js";
 async function runHealthcheck(
   config: ResolvedAdapterConfig
 ): Promise<ExecuteCommandResult | Error> {
+  const transport = requireCommandTransport(config);
+
   try {
     return await executeCommand({
-      program: config.command.program,
-      args: [...config.command.args, HEALTHCHECK_ARGUMENT],
+      program: transport.program,
+      args: [...transport.args, HEALTHCHECK_ARGUMENT],
       timeoutMs: DEFAULT_HEALTHCHECK_TIMEOUT_MS,
       logName: "gemini-healthcheck"
     });
@@ -22,16 +26,18 @@ async function runHealthcheck(
 
 function buildTextArgs(
   config: ResolvedAdapterConfig,
-  prompt: string,
+  userPrompt: string,
+  systemPrompt: string | undefined,
   providerModel: string | null
 ): string[] {
-  const args = [...config.command.args];
+  const transport = requireCommandTransport(config);
+  const args = [...transport.args];
 
   if (providerModel) {
     args.push(PROVIDER_MODEL_ARGUMENT, providerModel);
   }
 
-  args.push(GEMINI_PROMPT_ARGUMENT, prompt);
+  args.push(GEMINI_PROMPT_ARGUMENT, buildPrompt(userPrompt, systemPrompt));
 
   return args;
 }
@@ -43,9 +49,11 @@ async function executeGeminiAttempt(
   attemptLabel: string,
   timeoutMs: number
 ): Promise<ExecuteCommandResult> {
+  const transport = requireCommandTransport(config);
+
   return executeCommand({
-    program: config.command.program,
-    args: buildTextArgs(config, input.prompt, providerModel),
+    program: transport.program,
+    args: buildTextArgs(config, input.userPrompt, input.systemPrompt, providerModel),
     timeoutMs,
     logger: input.logger.child({
       phase: attemptLabel,
@@ -126,6 +134,7 @@ export class GeminiAdapter implements Adapter {
           inputTokens: null,
           cachedInputTokens: null,
           outputText: result.stdout,
+          thinkingText: null,
           outputTokens: null
         };
       } catch (error) {

@@ -2,6 +2,7 @@ import type { Adapter, AdapterAlias, AdapterAvailability, ResolvedAdapterConfig 
 import { CodexAdapter } from "../adapters/codex/index.js";
 import { CodexAppServerAdapter } from "../adapters/codex-app-server/index.js";
 import { GeminiAdapter } from "../adapters/gemini/index.js";
+import { OllamaAdapter } from "../adapters/ollama/index.js";
 import { ADAPTER_SKIP_FLAGS, ERROR_CODE_STARTUP } from "../config/constants.js";
 import { AppError } from "./errors.js";
 
@@ -17,16 +18,12 @@ export function buildAdapterRegistry(
 ): AdapterRegistry {
   const adapters = new Map<AdapterAlias, Adapter>();
 
-  if (adapterConfigs.codex.enabled && !skipAliases.includes(adapterConfigs.codex.alias)) {
-    adapters.set("codex", new CodexAdapter(adapterConfigs.codex));
-  }
+  for (const config of Object.values(adapterConfigs)) {
+    if (!config.enabled || skipAliases.includes(config.alias)) {
+      continue;
+    }
 
-  if (adapterConfigs["codex-app-server"].enabled && !skipAliases.includes(adapterConfigs["codex-app-server"].alias)) {
-    adapters.set("codex-app-server", new CodexAppServerAdapter(adapterConfigs["codex-app-server"]));
-  }
-
-  if (adapterConfigs.gemini.enabled && !skipAliases.includes(adapterConfigs.gemini.alias)) {
-    adapters.set("gemini", new GeminiAdapter(adapterConfigs.gemini));
+    adapters.set(config.alias, createAdapter(config));
   }
 
   return {
@@ -70,6 +67,19 @@ export function buildAdapterRegistry(
       }
     }
   };
+}
+
+function createAdapter(config: ResolvedAdapterConfig): Adapter {
+  switch (config.adapter) {
+    case "codex":
+      return new CodexAdapter(config);
+    case "codex-app-server":
+      return new CodexAppServerAdapter(config);
+    case "gemini":
+      return new GeminiAdapter(config);
+    case "ollama":
+      return new OllamaAdapter(config);
+  }
 }
 
 export async function assertStartupHealth(registry: AdapterRegistry): Promise<void> {

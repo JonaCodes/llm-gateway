@@ -142,6 +142,7 @@ export function parseCodexResult(stdout: string): AdapterGenerateResult {
       inputTokens: null,
       cachedInputTokens: null,
       outputText: stdout,
+      thinkingText: null,
       outputTokens: null
     };
   }
@@ -150,6 +151,7 @@ export function parseCodexResult(stdout: string): AdapterGenerateResult {
     inputTokens: latestUsage?.inputTokens ?? null,
     cachedInputTokens: latestUsage?.cachedInputTokens ?? null,
     outputText: latestText ?? stdout,
+    thinkingText: null,
     outputTokens: latestUsage?.outputTokens ?? null
   };
 }

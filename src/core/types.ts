@@ -3,25 +3,37 @@ import type { AppLogger } from "../utils/logger.js";
 
 export type { AdapterAlias, AdapterId, ResolvedAdapterConfig };
 
+export interface GenerateRequestOptions {
+  readonly thinking?: boolean;
+}
+
 export interface GenerateRequest {
   readonly model: AdapterAlias;
   readonly userPrompt: string;
   readonly systemPrompt?: string;
   readonly providerModel?: string;
+  readonly options?: GenerateRequestOptions;
+}
+
+export interface AdapterGenerateOptions {
+  readonly thinking: boolean;
 }
 
 export interface AdapterGenerateInput {
-  readonly prompt: string;
+  readonly userPrompt: string;
+  readonly systemPrompt?: string;
   readonly providerModel: string | null;
   readonly fallbackProviderModels: readonly string[];
   readonly timeoutMs: number;
   readonly logger: AppLogger;
+  readonly options: AdapterGenerateOptions;
 }
 
 export interface AdapterGenerateResult {
   readonly inputTokens: number | null;
   readonly cachedInputTokens: number | null;
   readonly outputText: string;
+  readonly thinkingText: string | null;
   readonly outputTokens: number | null;
 }
 
