@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ERROR_CODE_ADAPTER_EXECUTION, ERROR_CODE_SEED_NOT_FOUND } from "../src/config/constants.js";
+import { ERROR_CODE_ADAPTER_EXECUTION } from "../src/config/constants.js";
 import { AppError } from "../src/core/errors.js";
 import type { AdapterGenerateInput, ResolvedAdapterConfig } from "../src/core/types.js";
 import { CodexAppServerAdapter } from "../src/adapters/codex-app-server/index.js";
+import { createSeedId } from "../src/adapters/codex-app-server/seeds.js";
 
 const adapterConfig: ResolvedAdapterConfig = {
   alias: "codex-app-server",
@@ -18,91 +19,92 @@ const adapterConfig: ResolvedAdapterConfig = {
   }
 };
 
-test("stale seed fork failure invalidates the seed and returns seed_not_found", async () => {
+test("stale internal seed is recreated and the request succeeds", async () => {
   const adapter = new CodexAppServerAdapter(adapterConfig);
   const client = (adapter as unknown as { client: Record<string, unknown> }).client;
+  let createSeedCalls = 0;
+  let generateFromSeedCalls = 0;
 
-  client.createSeed = async () => "seed-thread";
+  client.createSeed = async () => {
+    createSeedCalls += 1;
+    return `seed-thread-${createSeedCalls}`;
+  };
   client.generateFromSeed = async () => {
-    throw new AppError("Codex app-server request 'thread/fork' failed", {
-      statusCode: 502,
-      code: ERROR_CODE_ADAPTER_EXECUTION,
-      details: {
-        error: {
-          code: -32600,
-          message: "no rollout found for thread id seed-thread"
-        },
-        stderr: null
-      }
-    });
+    generateFromSeedCalls += 1;
+
+    if (generateFromSeedCalls === 1) {
+      throw new AppError("Codex app-server request 'thread/fork' failed", {
+        statusCode: 502,
+        code: ERROR_CODE_ADAPTER_EXECUTION,
+        details: {
+          error: {
+            code: -32600,
+            message: "no rollout found for thread id seed-thread-1"
+          },
+          stderr: null
+        }
+      });
+    }
+
+    return {
+      inputTokens: 10,
+      cachedInputTokens: 8,
+      outputText: "ok",
+      outputTokens: 2
+    };
   };
 
-  await adapter.warmSeed({
-    seedKey: "doc-tagging-demo",
+  const result = await adapter.generateWithSystemPrompt({
     systemPrompt: "seed prompt",
+    prompt: "document payload",
     providerModel: "gpt-5.2",
     timeoutMs: 1000,
     logger: consoleLogger
   });
 
-  assert.ok(adapter.getSeed("doc-tagging-demo"));
+  assert.equal(result.outputText, "ok");
+  assert.equal(createSeedCalls, 2);
+  assert.equal(generateFromSeedCalls, 2);
 
-  await assert.rejects(
-    adapter.generateFromSeed({
-      seedKey: "doc-tagging-demo",
-      prompt: "document payload",
-      timeoutMs: 1000,
-      logger: consoleLogger
-    }),
-    (error: unknown) => {
-      assert.ok(error instanceof AppError);
-      assert.equal(error.code, ERROR_CODE_SEED_NOT_FOUND);
-      assert.equal(error.statusCode, 404);
-      assert.deepEqual(error.details, {
-        seedKey: "doc-tagging-demo",
-        reason: "Seed is no longer available in the current Codex app-server process; warm it again."
-      });
-      return true;
-    }
-  );
-
-  assert.equal(adapter.getSeed("doc-tagging-demo"), null);
+  const seeds = (adapter as unknown as { seeds: Map<string, { threadId: string }> }).seeds;
+  assert.equal(seeds.get(createSeedId("seed prompt", "gpt-5.2"))?.threadId, "seed-thread-2");
 });
 
-test("clearing process-local seeds invalidates warmed seed mappings", async () => {
+test("clearing process-local seeds causes the same prompt to be re-seeded on the next request", async () => {
   const adapter = new CodexAppServerAdapter(adapterConfig);
   const client = (adapter as unknown as { client: Record<string, unknown> }).client;
+  let createSeedCalls = 0;
 
-  client.createSeed = async () => "seed-thread";
+  client.createSeed = async () => {
+    createSeedCalls += 1;
+    return `seed-thread-${createSeedCalls}`;
+  };
+  client.generateFromSeed = async () => ({
+    inputTokens: 10,
+    cachedInputTokens: 8,
+    outputText: "ok",
+    outputTokens: 2
+  });
 
-  await adapter.warmSeed({
-    seedKey: "doc-tagging-demo",
+  await adapter.generateWithSystemPrompt({
     systemPrompt: "seed prompt",
+    prompt: "document payload",
     providerModel: "gpt-5.2",
     timeoutMs: 1000,
     logger: consoleLogger
   });
-
-  assert.ok(adapter.getSeed("doc-tagging-demo"));
 
   adapter.clearSeeds();
 
-  assert.equal(adapter.getSeed("doc-tagging-demo"), null);
+  await adapter.generateWithSystemPrompt({
+    systemPrompt: "seed prompt",
+    prompt: "document payload",
+    providerModel: "gpt-5.2",
+    timeoutMs: 1000,
+    logger: consoleLogger
+  });
 
-  await assert.rejects(
-    adapter.generateFromSeed({
-      seedKey: "doc-tagging-demo",
-      prompt: "document payload",
-      timeoutMs: 1000,
-      logger: consoleLogger
-    }),
-    (error: unknown) => {
-      assert.ok(error instanceof AppError);
-      assert.equal(error.code, ERROR_CODE_SEED_NOT_FOUND);
-      assert.equal(error.statusCode, 404);
-      return true;
-    }
-  );
+  assert.equal(createSeedCalls, 2);
 });
 
 const consoleLogger: AdapterGenerateInput["logger"] = {

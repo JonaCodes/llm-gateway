@@ -1,45 +1,33 @@
-import { ERROR_CODE_ADAPTER_EXECUTION, ERROR_CODE_SEED_NOT_FOUND } from "../../config/constants.js";
+import { ERROR_CODE_ADAPTER_EXECUTION } from "../../config/constants.js";
 import { AppError } from "../../core/errors.js";
 import type {
   Adapter,
   AdapterAvailability,
   AdapterGenerateInput,
   AdapterGenerateResult,
-  CodexAppServerSeedResult,
   ResolvedAdapterConfig
 } from "../../core/types.js";
 import { CodexAppServerClient } from "./client.js";
-import { createSeedMetadata, hashSystemPrompt, updateSeedMetadata, type SeedMetadata } from "./seeds.js";
+import { createSeedId, createSeedMetadata, updateSeedMetadata, type SeedMetadata } from "./seeds.js";
 
-export interface CodexAppServerSeedCapable {
-  warmSeed(input: {
-    readonly seedKey: string;
+export interface CodexAppServerPromptCachingCapable {
+  generateWithSystemPrompt(input: {
     readonly systemPrompt: string;
+    readonly prompt: string;
     readonly providerModel: string;
     readonly timeoutMs: number;
     readonly logger: AdapterGenerateInput["logger"];
-  }): Promise<CodexAppServerSeedResult>;
-  generateFromSeed(input: {
-    readonly seedKey: string;
-    readonly prompt: string;
-    readonly timeoutMs: number;
-    readonly logger: AdapterGenerateInput["logger"];
   }): Promise<AdapterGenerateResult>;
-  getSeed(seedKey: string): SeedMetadata | null;
 }
 
-export function isCodexAppServerSeedCapable(adapter: Adapter): adapter is Adapter & CodexAppServerSeedCapable {
+export function isCodexAppServerPromptCachingCapable(adapter: Adapter): adapter is Adapter & CodexAppServerPromptCachingCapable {
   return (
-    "warmSeed" in adapter &&
-    typeof adapter.warmSeed === "function" &&
-    "generateFromSeed" in adapter &&
-    typeof adapter.generateFromSeed === "function" &&
-    "getSeed" in adapter &&
-    typeof adapter.getSeed === "function"
+    "generateWithSystemPrompt" in adapter &&
+    typeof adapter.generateWithSystemPrompt === "function"
   );
 }
 
-export class CodexAppServerAdapter implements Adapter, CodexAppServerSeedCapable {
+export class CodexAppServerAdapter implements Adapter, CodexAppServerPromptCachingCapable {
   readonly id = "codex-app-server";
 
   private readonly client: CodexAppServerClient;
@@ -90,67 +78,19 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerSeedCapable
     );
   }
 
-  async warmSeed(input: {
-    readonly seedKey: string;
+  async generateWithSystemPrompt(input: {
     readonly systemPrompt: string;
-    readonly providerModel: string;
-    readonly timeoutMs: number;
-    readonly logger: AdapterGenerateInput["logger"];
-  }): Promise<CodexAppServerSeedResult> {
-    return this.enqueue(async () => {
-      const existing = this.seeds.get(input.seedKey) ?? null;
-      const promptHash = hashSystemPrompt(input.systemPrompt);
-
-      if (existing && existing.providerModel === input.providerModel && existing.systemPromptHash === promptHash) {
-        return {
-          seedKey: input.seedKey,
-          providerModel: existing.providerModel,
-          status: "reused"
-        };
-      }
-
-      const threadId = await this.client.createSeed(input.systemPrompt, input.providerModel, input.timeoutMs, input.logger);
-      const timestamp = new Date().toISOString();
-      const metadata = existing
-        ? updateSeedMetadata(existing, threadId, input.providerModel, input.systemPrompt, timestamp)
-        : createSeedMetadata(input.seedKey, threadId, input.providerModel, input.systemPrompt, timestamp);
-
-      this.seeds.set(input.seedKey, metadata);
-
-      if (existing) {
-        try {
-          await this.client.archiveThread(existing.threadId, input.logger);
-        } catch (error) {
-          input.logger.warn(
-            {
-              seedKey: input.seedKey,
-              previousThreadId: existing.threadId,
-              error: error instanceof Error ? error.message : error
-            },
-            "Failed to archive replaced Codex app-server seed thread"
-          );
-        }
-      }
-
-      return {
-        seedKey: input.seedKey,
-        providerModel: input.providerModel,
-        status: existing ? "replaced" : "created"
-      };
-    });
-  }
-
-  async generateFromSeed(input: {
-    readonly seedKey: string;
     readonly prompt: string;
+    readonly providerModel: string;
     readonly timeoutMs: number;
     readonly logger: AdapterGenerateInput["logger"];
   }): Promise<AdapterGenerateResult> {
     return this.enqueue(async () => {
-      const seed = this.seeds.get(input.seedKey);
+      const seedId = createSeedId(input.systemPrompt, input.providerModel);
+      let seed = this.seeds.get(seedId) ?? null;
 
       if (!seed) {
-        throw toSeedNotFoundError(input.seedKey);
+        seed = await this.ensureSeedMetadata(seedId, input.systemPrompt, input.providerModel, input.timeoutMs, input.logger);
       }
 
       try {
@@ -162,22 +102,28 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerSeedCapable
           input.logger
         );
       } catch (error) {
-        if (isStaleSeedError(error)) {
-          this.seeds.delete(input.seedKey);
-
-          throw toSeedNotFoundError(
-            input.seedKey,
-            "Seed is no longer available in the current Codex app-server process; warm it again."
-          );
+        if (!isStaleSeedError(error)) {
+          throw error;
         }
 
-        throw error;
+        this.seeds.delete(seedId);
+        const recreatedSeed = await this.ensureSeedMetadata(
+          seedId,
+          input.systemPrompt,
+          input.providerModel,
+          input.timeoutMs,
+          input.logger
+        );
+
+        return this.client.generateFromSeed(
+          recreatedSeed.threadId,
+          input.prompt,
+          recreatedSeed.providerModel,
+          input.timeoutMs,
+          input.logger
+        );
       }
     });
-  }
-
-  getSeed(seedKey: string): SeedMetadata | null {
-    return this.seeds.get(seedKey) ?? null;
   }
 
   clearSeeds(): void {
@@ -198,14 +144,24 @@ export class CodexAppServerAdapter implements Adapter, CodexAppServerSeedCapable
 
     return nextRun;
   }
-}
 
-function toSeedNotFoundError(seedKey: string, reason?: string): AppError {
-  return new AppError(`Seed '${seedKey}' was not found`, {
-    statusCode: 404,
-    code: ERROR_CODE_SEED_NOT_FOUND,
-    details: reason ? { seedKey, reason } : { seedKey }
-  });
+  private async ensureSeedMetadata(
+    seedId: string,
+    systemPrompt: string,
+    providerModel: string,
+    timeoutMs: number,
+    logger: AdapterGenerateInput["logger"]
+  ): Promise<SeedMetadata> {
+    const threadId = await this.client.createSeed(systemPrompt, providerModel, timeoutMs, logger);
+    const timestamp = new Date().toISOString();
+    const existing = this.seeds.get(seedId) ?? null;
+    const metadata = existing
+      ? updateSeedMetadata(existing, threadId, providerModel, timestamp)
+      : createSeedMetadata(seedId, threadId, providerModel, timestamp);
+
+    this.seeds.set(seedId, metadata);
+    return metadata;
+  }
 }
 
 function isStaleSeedError(error: unknown): boolean {

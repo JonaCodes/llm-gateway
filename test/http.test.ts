@@ -9,11 +9,12 @@ import type {
   AdapterAvailability,
   AdapterGenerateInput,
   AdapterGenerateResult,
-  CodexAppServerSeedResult,
   ResolvedAdapterConfig
 } from "../src/core/types.js";
 
 class NoopAdapter implements Adapter {
+  lastGeneratedPrompt: string | null = null;
+
   constructor(readonly id: AdapterAlias) {}
 
   async checkAvailability(): Promise<AdapterAvailability> {
@@ -26,7 +27,9 @@ class NoopAdapter implements Adapter {
     };
   }
 
-  async generate(_: AdapterGenerateInput): Promise<AdapterGenerateResult> {
+  async generate(input: AdapterGenerateInput): Promise<AdapterGenerateResult> {
+    this.lastGeneratedPrompt = input.prompt;
+
     return {
       inputTokens: 1,
       cachedInputTokens: null,
@@ -37,9 +40,8 @@ class NoopAdapter implements Adapter {
 }
 
 class MockCodexAppServerAdapter extends NoopAdapter {
-  private readonly seeds = new Map<string, { providerModel: string; threadId: string }>();
-  lastGeneratedPrompt: string | null = null;
-  lastSeededPrompt: string | null = null;
+  lastCachedSystemPrompt: string | null = null;
+  lastCachedUserPrompt: string | null = null;
 
   constructor() {
     super("codex-app-server");
@@ -56,65 +58,21 @@ class MockCodexAppServerAdapter extends NoopAdapter {
     };
   }
 
-  async warmSeed(input: {
-    readonly seedKey: string;
+  async generateWithSystemPrompt(input: {
     readonly systemPrompt: string;
+    readonly prompt: string;
     readonly providerModel: string;
     readonly timeoutMs: number;
     readonly logger: AdapterGenerateInput["logger"];
-  }): Promise<CodexAppServerSeedResult> {
-    const existing = this.seeds.get(input.seedKey);
-
-    if (existing && existing.providerModel === input.providerModel && input.systemPrompt === "seed prompt") {
-      return {
-        seedKey: input.seedKey,
-        providerModel: input.providerModel,
-        status: "reused"
-      };
-    }
-
-    this.seeds.set(input.seedKey, {
-      providerModel: input.providerModel,
-      threadId: `thread_${input.seedKey}`
-    });
-
-    return {
-      seedKey: input.seedKey,
-      providerModel: input.providerModel,
-      status: existing ? "replaced" : "created"
-    };
-  }
-
-  async generateFromSeed(input: {
-    readonly seedKey: string;
-    readonly prompt: string;
-    readonly timeoutMs: number;
-    readonly logger: AdapterGenerateInput["logger"];
   }): Promise<AdapterGenerateResult> {
-    this.lastSeededPrompt = input.prompt;
+    this.lastCachedSystemPrompt = input.systemPrompt;
+    this.lastCachedUserPrompt = input.prompt;
 
     return {
       inputTokens: 10,
       cachedInputTokens: 7,
       outputText: "seeded",
       outputTokens: 2
-    };
-  }
-
-  getSeed(seedKey: string) {
-    const seed = this.seeds.get(seedKey);
-
-    if (!seed) {
-      return null;
-    }
-
-    return {
-      seedKey,
-      threadId: seed.threadId,
-      providerModel: seed.providerModel,
-      systemPromptHash: "hash",
-      createdAt: "now",
-      updatedAt: "now"
     };
   }
 }
@@ -155,10 +113,10 @@ const adapterConfigs = {
   }
 } satisfies Record<AdapterAlias, ResolvedAdapterConfig>;
 
-function createRegistry(codexAppServerAdapter: MockCodexAppServerAdapter): AdapterRegistry {
+function createRegistry(codexAppServerAdapter: MockCodexAppServerAdapter, codexAdapter = new NoopAdapter("codex")): AdapterRegistry {
   return {
     adapters: new Map<AdapterAlias, Adapter>([
-      ["codex", new NoopAdapter("codex")],
+      ["codex", codexAdapter],
       ["codex-app-server", codexAppServerAdapter],
       ["gemini", new NoopAdapter("gemini")]
     ]),
@@ -167,48 +125,8 @@ function createRegistry(codexAppServerAdapter: MockCodexAppServerAdapter): Adapt
   };
 }
 
-test("codex app-server seed route warms a seed", async () => {
+test("codex app-server generate with systemPrompt uses cached path and exposes cachedInputTokens", async () => {
   const codexAppServerAdapter = new MockCodexAppServerAdapter();
-  const server = await createServer({
-    runtimeConfig: {
-      host: "127.0.0.1",
-      port: 4317,
-      requestTimeoutMs: 120000,
-      skipAliases: []
-    },
-    adapterConfigs,
-    adapterRegistry: createRegistry(codexAppServerAdapter)
-  });
-
-  const response = await server.inject({
-    method: "POST",
-    url: "/v1/codex-app-server/seeds",
-    payload: {
-      seedKey: "story-tagger",
-      systemPrompt: "seed prompt"
-    }
-  });
-
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json(), {
-    seedKey: "story-tagger",
-    providerModel: "gpt-5.2",
-    status: "created"
-  });
-
-  await server.close();
-});
-
-test("seeded generate uses seeded path and exposes cachedInputTokens", async () => {
-  const codexAppServerAdapter = new MockCodexAppServerAdapter();
-  await codexAppServerAdapter.warmSeed({
-    seedKey: "story-tagger",
-    systemPrompt: "seed prompt",
-    providerModel: "gpt-5.2",
-    timeoutMs: 1000,
-    logger: consoleLogger
-  });
-
   const server = await createServer({
     runtimeConfig: {
       host: "127.0.0.1",
@@ -225,20 +143,22 @@ test("seeded generate uses seeded path and exposes cachedInputTokens", async () 
     url: "/v1/generate",
     payload: {
       model: "codex-app-server",
-      userPrompt: "document payload",
-      seedKey: "story-tagger"
+      systemPrompt: "shared instructions",
+      userPrompt: "document payload"
     }
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(codexAppServerAdapter.lastSeededPrompt, "document payload");
+  assert.equal(codexAppServerAdapter.lastCachedSystemPrompt, "shared instructions");
+  assert.equal(codexAppServerAdapter.lastCachedUserPrompt, "document payload");
   assert.equal(codexAppServerAdapter.lastGeneratedPrompt, null);
-  assert.deepEqual(response.json().cachedInputTokens, 7);
+  assert.equal(response.json().cachedInputTokens, 7);
 
   await server.close();
 });
 
-test("generate rejects seedKey with systemPrompt", async () => {
+test("codex app-server generate without systemPrompt uses one-off path", async () => {
+  const codexAppServerAdapter = new MockCodexAppServerAdapter();
   const server = await createServer({
     runtimeConfig: {
       host: "127.0.0.1",
@@ -247,7 +167,7 @@ test("generate rejects seedKey with systemPrompt", async () => {
       skipAliases: []
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(new MockCodexAppServerAdapter())
+    adapterRegistry: createRegistry(codexAppServerAdapter)
   });
 
   const response = await server.inject({
@@ -255,18 +175,20 @@ test("generate rejects seedKey with systemPrompt", async () => {
     url: "/v1/generate",
     payload: {
       model: "codex-app-server",
-      userPrompt: "document payload",
-      systemPrompt: "should not be here",
-      seedKey: "story-tagger"
+      userPrompt: "document payload"
     }
   });
 
-  assert.equal(response.statusCode, 400);
+  assert.equal(response.statusCode, 200);
+  assert.equal(codexAppServerAdapter.lastGeneratedPrompt, "document payload");
+  assert.equal(codexAppServerAdapter.lastCachedSystemPrompt, null);
+  assert.equal(response.json().cachedInputTokens, null);
 
   await server.close();
 });
 
-test("generate rejects seedKey on non-codex-app-server models", async () => {
+test("codex generate still uses normal prompt assembly when systemPrompt is present", async () => {
+  const codexAdapter = new NoopAdapter("codex");
   const server = await createServer({
     runtimeConfig: {
       host: "127.0.0.1",
@@ -275,7 +197,7 @@ test("generate rejects seedKey on non-codex-app-server models", async () => {
       skipAliases: []
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(new MockCodexAppServerAdapter())
+    adapterRegistry: createRegistry(new MockCodexAppServerAdapter(), codexAdapter)
   });
 
   const response = await server.inject({
@@ -283,48 +205,14 @@ test("generate rejects seedKey on non-codex-app-server models", async () => {
     url: "/v1/generate",
     payload: {
       model: "codex",
-      userPrompt: "document payload",
-      seedKey: "story-tagger"
+      systemPrompt: "shared instructions",
+      userPrompt: "document payload"
     }
   });
 
-  assert.equal(response.statusCode, 400);
+  assert.equal(response.statusCode, 200);
+  assert.match(codexAdapter.lastGeneratedPrompt ?? "", /System:\nshared instructions/);
+  assert.match(codexAdapter.lastGeneratedPrompt ?? "", /User:\ndocument payload/);
 
   await server.close();
 });
-
-test("generate returns 404 for unknown seed", async () => {
-  const server = await createServer({
-    runtimeConfig: {
-      host: "127.0.0.1",
-      port: 4317,
-      requestTimeoutMs: 120000,
-      skipAliases: []
-    },
-    adapterConfigs,
-    adapterRegistry: createRegistry(new MockCodexAppServerAdapter())
-  });
-
-  const response = await server.inject({
-    method: "POST",
-    url: "/v1/generate",
-    payload: {
-      model: "codex-app-server",
-      userPrompt: "document payload",
-      seedKey: "missing"
-    }
-  });
-
-  assert.equal(response.statusCode, 404);
-  assert.equal(response.json().error.code, "seed_not_found");
-
-  await server.close();
-});
-
-const consoleLogger: AdapterGenerateInput["logger"] = {
-  info: () => undefined,
-  warn: () => undefined,
-  error: () => undefined,
-  debug: () => undefined,
-  child: () => consoleLogger
-};

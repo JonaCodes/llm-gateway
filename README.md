@@ -10,21 +10,21 @@ So I made this to expose the CLI-based LLMs as a local HTTP service. Then I adde
 
 ## Which Path To Use
 
-- `codex-app-server` with seeded fork flow
+- `codex-app-server` with automatic prompt reuse
   - recommended for repeated work where many requests share the same system prompt
   - best fit for tagging, classification, extraction, or any batch process over many items
-  - the goal is to warm one shared prompt once, then fork child threads so later requests can benefit from cache reuse
+  - the server internally reuses a warmed seed derived from `systemPrompt + providerModel`, then forks child threads so later requests can benefit from cache reuse
 - `codex`
   - useful as a simple one-shot Codex path
   - best for convenience, debugging, or low-volume requests
 - `gemini`
   - useful when you explicitly want the Gemini backend or its fallback behavior
 
-## Why The Fork Flow Matters
+## Why Prompt Reuse Matters
 
-The seeded `codex-app-server` flow is the main optimization path in this repo.
+The `codex-app-server` prompt-reuse path is the main optimization path in this repo.
 
-If you have a large stable system prompt and many different user payloads, the fork flow lets you:
+If you have a large stable system prompt and many different user payloads, this path lets you:
 
 - warm the shared prompt once
 - fork isolated child runs for each item
@@ -35,26 +35,12 @@ That is the path to prefer for workloads like tagging hundreds of documents with
 
 Example:
 
-_Seeding_
-
-```bash
-curl -s http://127.0.0.1:4317/v1/codex-app-server/seeds \
-  -H 'content-type: application/json' \
-  -d '{
-    "seedKey": "doc-tagging-demo",
-    "providerModel": "gpt-5.2",
-    "systemPrompt": "Large shared tagging instructions (e.g system prompt) go here"
-  }'
-```
-
-_Taking advantage of the cache (no need to resend the system prompt every time)_
-
 ```bash
 curl -s http://127.0.0.1:4317/v1/generate \
   -H 'content-type: application/json' \
   -d '{
     "model": "codex-app-server",
-    "seedKey": "doc-tagging-demo",
+    "systemPrompt": "Large shared tagging instructions (e.g system prompt) go here",
     "userPrompt": "Document payload 1"
   }'
 ```
@@ -64,12 +50,12 @@ curl -s http://127.0.0.1:4317/v1/generate \
   -H 'content-type: application/json' \
   -d '{
     "model": "codex-app-server",
-    "seedKey": "doc-tagging-demo",
+    "systemPrompt": "Large shared tagging instructions (e.g system prompt) go here",
     "userPrompt": "Document payload 2"
   }'
 ```
 
-In practice, the first forked request does not always show a cache hit, but follow-up requests often do. Check `cachedInputTokens` in the response rather than assuming every seeded request will report reuse identically.
+For `codex-app-server`, repeated requests with the same `systemPrompt + providerModel` automatically reuse the same internal seed. In practice, **the first request does not always show a cache hit**, but follow-up requests often do. Check `cachedInputTokens` in the response rather than assuming every request will report reuse identically.
 
 ## Quick Start
 

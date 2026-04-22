@@ -5,7 +5,6 @@ export const DEFAULT_HEALTHCHECK_TIMEOUT_MS = 5000;
 export const DEFAULT_PROCESS_KILL_GRACE_MS = 2000;
 
 export const GENERATE_ROUTE = "/v1/generate";
-export const CODEX_APP_SERVER_SEEDS_ROUTE = "/v1/codex-app-server/seeds";
 export const HEALTH_ROUTE = "/health";
 
 export const REQUEST_ID_PREFIX = "req";
@@ -27,7 +26,6 @@ export const ERROR_CODE_ADAPTER_UNAVAILABLE = "adapter_unavailable";
 export const ERROR_CODE_ADAPTER_EXECUTION = "adapter_execution_failed";
 export const ERROR_CODE_STARTUP = "startup_error";
 export const ERROR_CODE_INTERNAL = "internal_error";
-export const ERROR_CODE_SEED_NOT_FOUND = "seed_not_found";
 
 export const ADAPTER_SKIP_FLAGS = {
   codex: "--skip-codex",
