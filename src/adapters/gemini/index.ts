@@ -124,6 +124,7 @@ export class GeminiAdapter implements Adapter {
 
         return {
           inputTokens: null,
+          cachedInputTokens: null,
           outputText: result.stdout,
           outputTokens: null
         };

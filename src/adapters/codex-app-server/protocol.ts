@@ -5,6 +5,8 @@ export const DEFAULT_CODEX_APP_SERVER_CWD = "/tmp";
 export const DEFAULT_CODEX_APP_SERVER_SANDBOX = "read-only";
 export const DEFAULT_CODEX_APP_SERVER_APPROVAL_POLICY = "never";
 export const INITIALIZE_METHOD = "initialize";
+export const THREAD_ARCHIVE_METHOD = "thread/archive";
+export const THREAD_FORK_METHOD = "thread/fork";
 export const THREAD_START_METHOD = "thread/start";
 export const THREAD_UNSUBSCRIBE_METHOD = "thread/unsubscribe";
 export const TURN_START_METHOD = "turn/start";
@@ -20,11 +22,19 @@ export interface ThreadStartResponse {
   };
 }
 
+export interface ThreadForkResponse {
+  readonly thread: {
+    readonly id: string;
+  };
+}
+
 export interface TurnStartResponse {
   readonly turn: {
     readonly id: string;
   };
 }
+
+export interface ThreadArchiveResponse {}
 
 export interface ThreadUnsubscribeResponse {
   readonly status: "notLoaded" | "notSubscribed" | "unsubscribed";

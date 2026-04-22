@@ -5,23 +5,28 @@ import { DEFAULT_HEALTHCHECK_TIMEOUT_MS } from "../../config/constants.js";
 import type { AdapterGenerateResult, ResolvedAdapterConfig } from "../../core/types.js";
 import type { AppLogger } from "../../utils/logger.js";
 import {
-  DEFAULT_CODEX_APP_SERVER_APPROVAL_POLICY,
-  DEFAULT_CODEX_APP_SERVER_CWD,
-  DEFAULT_CODEX_APP_SERVER_SANDBOX,
   INITIALIZE_METHOD,
   MAX_STDERR_BUFFER_LENGTH,
-  THREAD_START_METHOD,
-  THREAD_UNSUBSCRIBE_METHOD,
-  TURN_START_METHOD,
   toAppError,
   type InitializeResponse,
-  type JsonRpcNotification,
-  type ThreadStartResponse,
-  type ThreadUnsubscribeResponse,
-  type TurnStartResponse
+  type JsonRpcNotification
 } from "./protocol.js";
+import { registerCodexAppServerProcessHandlers } from "./process-lifecycle.js";
 import { JsonRpcConnection } from "./rpc.js";
+import {
+  archiveThread,
+  forkThread,
+  runTurn,
+  startEphemeralThread,
+  startSeedThread,
+  warmSeedRollout,
+  unsubscribeThread
+} from "./thread-client.js";
 import { createTurnOperation, handleTurnOperationNotification, type TurnOperation } from "./turn-operation.js";
+
+interface CodexAppServerClientOptions {
+  readonly onProcessExit?: () => void;
+}
 
 export class CodexAppServerClient {
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -32,7 +37,10 @@ export class CodexAppServerClient {
   private stderrBuffer = "";
   private startupPromise: Promise<void> | null = null;
 
-  constructor(private readonly config: ResolvedAdapterConfig) {}
+  constructor(
+    private readonly config: ResolvedAdapterConfig,
+    private readonly options: CodexAppServerClientOptions = {}
+  ) {}
 
   async ensureStarted(logger?: AppLogger): Promise<void> {
     if (this.startupPromise) {
@@ -56,7 +64,7 @@ export class CodexAppServerClient {
     await this.ensureStarted(logger);
 
     const startedAt = Date.now();
-    const threadId = await this.startThread(providerModel, timeoutMs, logger);
+    const threadId = await this.startEphemeralThread(providerModel, timeoutMs, logger);
     const operation = createTurnOperation(threadId);
     this.turnOperations.set(threadId, operation);
 
@@ -68,6 +76,60 @@ export class CodexAppServerClient {
       this.turnOperations.delete(threadId);
       await this.unsubscribeThread(threadId, logger);
     }
+  }
+
+  async createSeed(systemPrompt: string, providerModel: string, timeoutMs: number, logger: AppLogger): Promise<string> {
+    await this.ensureStarted(logger);
+
+    const startedAt = Date.now();
+    const threadId = await this.startSeedThread(systemPrompt, providerModel, timeoutMs, logger);
+    const operation = createTurnOperation(threadId);
+    this.turnOperations.set(threadId, operation);
+
+    try {
+      const elapsedMs = Date.now() - startedAt;
+      const remainingTimeoutMs = Math.max(1, timeoutMs - elapsedMs);
+      await warmSeedRollout(
+        this.request.bind(this),
+        () => this.stderrBuffer || null,
+        threadId,
+        remainingTimeoutMs,
+        logger,
+        operation
+      );
+      return threadId;
+    } finally {
+      this.turnOperations.delete(threadId);
+    }
+  }
+
+  async generateFromSeed(
+    seedThreadId: string,
+    prompt: string,
+    providerModel: string,
+    timeoutMs: number,
+    logger: AppLogger
+  ): Promise<AdapterGenerateResult> {
+    await this.ensureStarted(logger);
+
+    const startedAt = Date.now();
+    const threadId = await this.forkThread(seedThreadId, providerModel, timeoutMs, logger);
+    const operation = createTurnOperation(threadId);
+    this.turnOperations.set(threadId, operation);
+
+    try {
+      const elapsedMs = Date.now() - startedAt;
+      const remainingTimeoutMs = Math.max(1, timeoutMs - elapsedMs);
+      return await this.runTurn(threadId, prompt, remainingTimeoutMs, logger, operation);
+    } finally {
+      this.turnOperations.delete(threadId);
+      await this.unsubscribeThread(threadId, logger);
+    }
+  }
+
+  async archiveThread(threadId: string, logger: AppLogger): Promise<void> {
+    await this.ensureStarted(logger);
+    await archiveThread(this.request.bind(this), threadId, logger);
   }
 
   private async start(logger?: AppLogger): Promise<void> {
@@ -98,29 +160,15 @@ export class CodexAppServerClient {
       logger?.debug({ line }, "Codex app-server stderr");
     });
 
-    child.on("error", (error) => {
-      this.rpc?.rejectAllPending(toAppError("Failed to start Codex app-server", { error: error.message }));
-      this.clearProcessState();
-    });
-
-    child.on("close", (exitCode, signal) => {
-      const details = {
-        exitCode: exitCode ?? null,
-        signal: signal ?? null,
-        stderr: this.stderrBuffer || null
-      };
-
-      this.rpc?.rejectAllPending(toAppError("Codex app-server exited unexpectedly", details));
-
-      for (const operation of this.turnOperations.values()) {
-        operation.reject?.(toAppError("Codex app-server exited during generation", details));
-      }
-
-      this.turnOperations.clear();
-      this.clearProcessState();
-
-      // TODO: If mid-run app-server exits become common in practice, add targeted restart/supervision
-      // instead of just failing the in-flight request and relying on a later request to recreate it.
+    registerCodexAppServerProcessHandlers({
+      child,
+      rpc: this.rpc,
+      turnOperations: this.turnOperations,
+      clearProcessState: () => {
+        this.clearProcessState();
+      },
+      getStderr: () => this.stderrBuffer || null,
+      onProcessExit: this.options.onProcessExit
     });
 
     logger?.info({ program: this.config.command.program }, "Starting Codex app-server");
@@ -150,21 +198,26 @@ export class CodexAppServerClient {
     }
   }
 
-  private async startThread(providerModel: string, timeoutMs: number, logger: AppLogger): Promise<string> {
-    const response = await this.request<ThreadStartResponse>(
-      THREAD_START_METHOD,
-      {
-        approvalPolicy: DEFAULT_CODEX_APP_SERVER_APPROVAL_POLICY,
-        cwd: DEFAULT_CODEX_APP_SERVER_CWD,
-        ephemeral: true,
-        model: providerModel,
-        sandbox: DEFAULT_CODEX_APP_SERVER_SANDBOX
-      },
-      timeoutMs
-    );
+  private async startEphemeralThread(providerModel: string, timeoutMs: number, logger: AppLogger): Promise<string> {
+    return startEphemeralThread(this.request.bind(this), providerModel, timeoutMs, logger);
+  }
 
-    logger.debug({ threadId: response.thread.id, providerModel }, "Started Codex app-server thread");
-    return response.thread.id;
+  private async startSeedThread(
+    systemPrompt: string,
+    providerModel: string,
+    timeoutMs: number,
+    logger: AppLogger
+  ): Promise<string> {
+    return startSeedThread(this.request.bind(this), systemPrompt, providerModel, timeoutMs, logger);
+  }
+
+  private async forkThread(
+    seedThreadId: string,
+    providerModel: string,
+    timeoutMs: number,
+    logger: AppLogger
+  ): Promise<string> {
+    return forkThread(this.request.bind(this), seedThreadId, providerModel, timeoutMs, logger);
   }
 
   private async runTurn(
@@ -174,76 +227,19 @@ export class CodexAppServerClient {
     logger: AppLogger,
     operation: TurnOperation
   ): Promise<AdapterGenerateResult> {
-    return new Promise<AdapterGenerateResult>((resolve, reject) => {
-      const completionTimeout = setTimeout(() => {
-        if (operation.completed) {
-          return;
-        }
-
-        operation.completed = true;
-        reject(
-          toAppError("Codex app-server turn timed out", {
-            threadId,
-            turnId: operation.turnId,
-            stderr: this.stderrBuffer || null
-          }, 504)
-        );
-      }, timeoutMs);
-
-      const settle = <T>(callback: (value: T) => void, value: T) => {
-        if (operation.completed) {
-          return;
-        }
-
-        operation.completed = true;
-        clearTimeout(completionTimeout);
-        callback(value);
-      };
-
-      operation.resolve = (result) => settle(resolve, result);
-      operation.reject = (error) => settle(reject, error);
-
-      void this.request<TurnStartResponse>(
-        TURN_START_METHOD,
-        {
-          input: [
-            {
-              type: "text",
-              text: prompt,
-              text_elements: []
-            }
-          ],
-          threadId
-        },
-        timeoutMs
-      )
-        .then((response) => {
-          operation.turnId = response.turn.id;
-          logger.debug({ threadId, turnId: response.turn.id }, "Started Codex app-server turn");
-        })
-        .catch((error) => {
-          settle(
-            reject,
-            error instanceof Error
-              ? error
-              : toAppError("Failed to start Codex app-server turn", { error })
-          );
-        });
-    });
+    return runTurn(
+      this.request.bind(this),
+      () => this.stderrBuffer || null,
+      threadId,
+      prompt,
+      timeoutMs,
+      logger,
+      operation
+    );
   }
 
   private async unsubscribeThread(threadId: string, logger: AppLogger): Promise<void> {
-    try {
-      const response = await this.request<ThreadUnsubscribeResponse>(
-        THREAD_UNSUBSCRIBE_METHOD,
-        { threadId },
-        DEFAULT_HEALTHCHECK_TIMEOUT_MS
-      );
-
-      logger.debug({ threadId, status: response.status }, "Unsubscribed Codex app-server thread");
-    } catch (error) {
-      logger.warn({ threadId, error: error instanceof Error ? error.message : error }, "Failed to unsubscribe Codex app-server thread");
-    }
+    await unsubscribeThread(this.request.bind(this), threadId, logger);
   }
 
   private async request<T>(method: string, params: unknown, timeoutMs: number): Promise<T> {

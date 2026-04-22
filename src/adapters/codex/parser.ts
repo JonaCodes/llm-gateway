@@ -3,6 +3,7 @@ import { isRecord, toNullableNumber, tryParseJson } from "../../utils/json.js";
 
 interface CodexUsage {
   readonly inputTokens: number | null;
+  readonly cachedInputTokens: number | null;
   readonly outputTokens: number | null;
 }
 
@@ -83,6 +84,7 @@ function extractUsageFromEvent(event: unknown): CodexUsage | null {
   if (event.type === "turn.completed" && isRecord(event.usage)) {
     return {
       inputTokens: toNullableNumber(event.usage.input_tokens),
+      cachedInputTokens: toNullableNumber(event.usage.cached_input_tokens),
       outputTokens: toNullableNumber(event.usage.output_tokens)
     };
   }
@@ -96,6 +98,7 @@ function extractUsageFromEvent(event: unknown): CodexUsage | null {
     if (usageSource) {
       return {
         inputTokens: toNullableNumber(usageSource.input_tokens),
+        cachedInputTokens: toNullableNumber(usageSource.cached_input_tokens),
         outputTokens: toNullableNumber(usageSource.output_tokens)
       };
     }
@@ -137,6 +140,7 @@ export function parseCodexResult(stdout: string): AdapterGenerateResult {
   if (parsedCount === 0) {
     return {
       inputTokens: null,
+      cachedInputTokens: null,
       outputText: stdout,
       outputTokens: null
     };
@@ -144,6 +148,7 @@ export function parseCodexResult(stdout: string): AdapterGenerateResult {
 
   return {
     inputTokens: latestUsage?.inputTokens ?? null,
+    cachedInputTokens: latestUsage?.cachedInputTokens ?? null,
     outputText: latestText ?? stdout,
     outputTokens: latestUsage?.outputTokens ?? null
   };

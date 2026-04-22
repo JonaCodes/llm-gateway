@@ -13,6 +13,7 @@ export interface TurnOperation {
   streamedText: string;
   latestAssistantText: string | null;
   inputTokens: number | null;
+  cachedInputTokens: number | null;
   outputTokens: number | null;
   completed: boolean;
   resolve?: (result: AdapterGenerateResult) => void;
@@ -26,6 +27,7 @@ export function createTurnOperation(threadId: string): TurnOperation {
     streamedText: "",
     latestAssistantText: null,
     inputTokens: null,
+    cachedInputTokens: null,
     outputTokens: null,
     completed: false
   };
@@ -70,6 +72,7 @@ export function handleTurnOperationNotification(
       }
 
       operation.inputTokens = toNullableNumber(notification.params.tokenUsage.last.inputTokens);
+      operation.cachedInputTokens = toNullableNumber(notification.params.tokenUsage.last.cachedInputTokens);
       operation.outputTokens = toNullableNumber(notification.params.tokenUsage.last.outputTokens);
       return;
     }
@@ -97,6 +100,7 @@ export function handleTurnOperationNotification(
 
       operation.resolve?.({
         inputTokens: operation.inputTokens,
+        cachedInputTokens: operation.cachedInputTokens,
         outputText: operation.latestAssistantText ?? operation.streamedText,
         outputTokens: operation.outputTokens
       });

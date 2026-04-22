@@ -161,6 +161,7 @@ test("parseCodexResult extracts output and token usage from jsonl", () => {
 
   assert.equal(result.outputText, "hello");
   assert.equal(result.inputTokens, 123);
+  assert.equal(result.cachedInputTokens, null);
   assert.equal(result.outputTokens, 9);
 });
 
@@ -187,6 +188,7 @@ test("parseCodexResult extracts output from agent_message text field", () => {
 
   assert.equal(result.outputText, "Hello there, nice to meet you.");
   assert.equal(result.inputTokens, 5203);
+  assert.equal(result.cachedInputTokens, null);
   assert.equal(result.outputTokens, 12);
 });
 

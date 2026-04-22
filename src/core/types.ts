@@ -8,6 +8,19 @@ export interface GenerateRequest {
   readonly userPrompt: string;
   readonly systemPrompt?: string;
   readonly providerModel?: string;
+  readonly seedKey?: string;
+}
+
+export interface CodexAppServerSeedRequest {
+  readonly seedKey: string;
+  readonly systemPrompt: string;
+  readonly providerModel?: string;
+}
+
+export interface CodexAppServerSeedResult {
+  readonly seedKey: string;
+  readonly providerModel: string;
+  readonly status: "created" | "reused" | "replaced";
 }
 
 export interface AdapterGenerateInput {
@@ -16,10 +29,12 @@ export interface AdapterGenerateInput {
   readonly fallbackProviderModels: readonly string[];
   readonly timeoutMs: number;
   readonly logger: AppLogger;
+  readonly seedKey?: string;
 }
 
 export interface AdapterGenerateResult {
   readonly inputTokens: number | null;
+  readonly cachedInputTokens: number | null;
   readonly outputText: string;
   readonly outputTokens: number | null;
 }
