@@ -5,7 +5,10 @@ import { parseCodexResult } from "../src/adapters/codex/parser.js";
 import { shouldRetryGeminiWithFallback } from "../src/adapters/gemini/retry.js";
 import { buildPrompt } from "../src/core/prompt.js";
 import { resolveEffectiveModelSelection } from "../src/core/router.js";
-import { loadRuntimeConfig, parseStartupOptions } from "../src/config/runtime.js";
+import {
+  loadRuntimeConfig,
+  parseStartupOptions,
+} from "../src/config/runtime.js";
 
 const adapterConfigs = {
   codex: {
@@ -17,8 +20,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qodex",
-      args: []
-    }
+      args: [],
+    },
   },
   "codex-app-server": {
     alias: "codex-app-server",
@@ -29,8 +32,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qodex-app-server",
-      args: []
-    }
+      args: [],
+    },
   },
   gemini: {
     alias: "gemini",
@@ -41,8 +44,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qgemini",
-      args: []
-    }
+      args: [],
+    },
   },
   "gemma4-e2b": {
     alias: "gemma4-e2b",
@@ -53,8 +56,8 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "10m"
-    }
+      defaultKeepAlive: "1m",
+    },
   },
   "gemma4-e4b": {
     alias: "gemma4-e4b",
@@ -65,9 +68,9 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "10m"
-    }
-  }
+      defaultKeepAlive: "1m",
+    },
+  },
 } as const;
 
 test("buildPrompt returns only user prompt when system prompt is omitted", () => {
@@ -77,7 +80,7 @@ test("buildPrompt returns only user prompt when system prompt is omitted", () =>
 test("buildPrompt combines system and user prompts when both are provided", () => {
   assert.equal(
     buildPrompt("classify this", "Return JSON"),
-    "System:\nReturn JSON\n\nUser:\nclassify this"
+    "System:\nReturn JSON\n\nUser:\nclassify this",
   );
 });
 
@@ -85,9 +88,9 @@ test("resolveEffectiveModelSelection uses adapter default model", () => {
   const selection = resolveEffectiveModelSelection(
     {
       model: "codex",
-      userPrompt: "classify this"
+      userPrompt: "classify this",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gpt-5.2");
@@ -98,9 +101,9 @@ test("resolveEffectiveModelSelection uses codex app-server default model", () =>
   const selection = resolveEffectiveModelSelection(
     {
       model: "codex-app-server",
-      userPrompt: "classify this"
+      userPrompt: "classify this",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gpt-5.2");
@@ -112,9 +115,9 @@ test("resolveEffectiveModelSelection prefers request override", () => {
     {
       model: "gemini",
       userPrompt: "classify this",
-      providerModel: "gemini-2.5-flash"
+      providerModel: "gemini-2.5-flash",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gemini-2.5-flash");
@@ -124,22 +127,24 @@ test("resolveEffectiveModelSelection uses configured Gemini default and fallback
   const selection = resolveEffectiveModelSelection(
     {
       model: "gemini",
-      userPrompt: "classify this"
+      userPrompt: "classify this",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gemini-3.1-flash-lite-preview");
-  assert.deepEqual(selection.fallbackProviderModels, ["gemini-3-flash-preview"]);
+  assert.deepEqual(selection.fallbackProviderModels, [
+    "gemini-3-flash-preview",
+  ]);
 });
 
 test("resolveEffectiveModelSelection maps Gemma alias to Ollama adapter", () => {
   const selection = resolveEffectiveModelSelection(
     {
       model: "gemma4-e2b",
-      userPrompt: "classify this"
+      userPrompt: "classify this",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.adapterId, "ollama");
@@ -151,9 +156,9 @@ test("resolveEffectiveModelSelection suppresses fallback models for explicit ove
     {
       model: "gemini",
       userPrompt: "classify this",
-      providerModel: "gemini-3-flash-preview"
+      providerModel: "gemini-3-flash-preview",
     },
-    { adapterConfigs }
+    { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gemini-3-flash-preview");
@@ -184,19 +189,19 @@ test("parseCodexResult extracts output and token usage from jsonl", () => {
           content: [
             {
               type: "output_text",
-              text: "hello"
-            }
-          ]
-        }
+              text: "hello",
+            },
+          ],
+        },
       }),
       JSON.stringify({
         type: "turn.completed",
         usage: {
           input_tokens: 123,
-          output_tokens: 9
-        }
-      })
-    ].join("\n")
+          output_tokens: 9,
+        },
+      }),
+    ].join("\n"),
   );
 
   assert.equal(result.outputText, "hello");
@@ -214,17 +219,17 @@ test("parseCodexResult extracts output from agent_message text field", () => {
         item: {
           id: "item_0",
           type: "agent_message",
-          text: "Hello there, nice to meet you."
-        }
+          text: "Hello there, nice to meet you.",
+        },
       }),
       JSON.stringify({
         type: "turn.completed",
         usage: {
           input_tokens: 5203,
-          output_tokens: 12
-        }
-      })
-    ].join("\n")
+          output_tokens: 12,
+        },
+      }),
+    ].join("\n"),
   );
 
   assert.equal(result.outputText, "Hello there, nice to meet you.");
@@ -237,17 +242,18 @@ test("parseCodexResult extracts output from agent_message text field", () => {
 test("shouldRetryGeminiWithFallback detects retryable quota-style failures", () => {
   assert.equal(
     shouldRetryGeminiWithFallback({
-      stderr: "Attempt 1 failed: You have exhausted your capacity on this model."
+      stderr:
+        "Attempt 1 failed: You have exhausted your capacity on this model.",
     }),
-    true
+    true,
   );
 });
 
 test("shouldRetryGeminiWithFallback ignores non-retryable failures", () => {
   assert.equal(
     shouldRetryGeminiWithFallback({
-      stderr: "Authentication failed."
+      stderr: "Authentication failed.",
     }),
-    false
+    false,
   );
 });

@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import type { AdapterGenerateInput, ResolvedAdapterConfig } from "../src/core/types.js";
+import type {
+  AdapterGenerateInput,
+  ResolvedAdapterConfig,
+} from "../src/core/types.js";
 import { OllamaAdapter } from "../src/adapters/ollama/index.js";
 
 const adapterConfig: ResolvedAdapterConfig = {
@@ -13,8 +16,8 @@ const adapterConfig: ResolvedAdapterConfig = {
   transport: {
     kind: "http",
     baseUrl: "http://127.0.0.1:11434",
-    defaultKeepAlive: "10m"
-  }
+    defaultKeepAlive: "1m",
+  },
 };
 
 test("ollama healthcheck reports daemon failures", async () => {
@@ -41,9 +44,9 @@ test("ollama healthcheck reports missing configured models", async () => {
       models: [
         {
           name: "gemma4:e4b",
-          model: "gemma4:e4b"
-        }
-      ]
+          model: "gemma4:e4b",
+        },
+      ],
     });
 
   try {
@@ -51,7 +54,10 @@ test("ollama healthcheck reports missing configured models", async () => {
     const result = await adapter.checkAvailability();
 
     assert.equal(result.available, false);
-    assert.equal(result.reason, "Model 'gemma4:e2b' is not installed in Ollama");
+    assert.equal(
+      result.reason,
+      "Model 'gemma4:e2b' is not installed in Ollama",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -59,20 +65,24 @@ test("ollama healthcheck reports missing configured models", async () => {
 
 test("ollama generate maps token counts and omits thinking text by default", async () => {
   const originalFetch = globalThis.fetch;
-  const requests: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+  const requests: Array<{ url: string; body: Record<string, unknown> | null }> =
+    [];
   globalThis.fetch = async (input, init) => {
     requests.push({
       url: String(input),
-      body: typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : null
+      body:
+        typeof init?.body === "string"
+          ? (JSON.parse(init.body) as Record<string, unknown>)
+          : null,
     });
 
     return jsonResponse({
       message: {
         role: "assistant",
-        content: "ok"
+        content: "ok",
       },
       prompt_eval_count: 12,
-      eval_count: 4
+      eval_count: 4,
     });
   };
 
@@ -86,7 +96,7 @@ test("ollama generate maps token counts and omits thinking text by default", asy
     assert.equal(result.outputTokens, 4);
     assert.equal(result.cachedInputTokens, null);
     assert.equal(requests[0]?.url, "http://127.0.0.1:11434/api/chat");
-    assert.equal(requests[0]?.body?.keep_alive, "10m");
+    assert.equal(requests[0]?.body?.keep_alive, "1m");
     assert.equal(requests[0]?.body?.think, false);
   } finally {
     globalThis.fetch = originalFetch;
@@ -100,18 +110,18 @@ test("ollama generate returns separate thinking text when enabled", async () => 
       message: {
         role: "assistant",
         content: "final answer",
-        thinking: "reasoning trace"
+        thinking: "reasoning trace",
       },
       prompt_eval_count: 20,
-      eval_count: 6
+      eval_count: 6,
     });
 
   try {
     const adapter = new OllamaAdapter(adapterConfig);
     const result = await adapter.generate(
       createGenerateInput({
-        options: { thinking: true }
-      })
+        options: { thinking: true },
+      }),
     );
 
     assert.equal(result.outputText, "final answer");
@@ -122,7 +132,7 @@ test("ollama generate returns separate thinking text when enabled", async () => 
 });
 
 function createGenerateInput(
-  overrides: Partial<AdapterGenerateInput> = {}
+  overrides: Partial<AdapterGenerateInput> = {},
 ): AdapterGenerateInput {
   return {
     userPrompt: "document payload",
@@ -131,10 +141,10 @@ function createGenerateInput(
     fallbackProviderModels: [],
     timeoutMs: 1000,
     options: {
-      thinking: false
+      thinking: false,
     },
     logger: consoleLogger,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -142,8 +152,8 @@ function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: {
-      "content-type": "application/json"
-    }
+      "content-type": "application/json",
+    },
   });
 }
 
@@ -152,5 +162,5 @@ const consoleLogger: AdapterGenerateInput["logger"] = {
   warn: () => undefined,
   error: () => undefined,
   debug: () => undefined,
-  child: () => consoleLogger
+  child: () => consoleLogger,
 };

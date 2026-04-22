@@ -10,7 +10,7 @@ import type {
   AdapterAvailability,
   AdapterGenerateInput,
   AdapterGenerateResult,
-  ResolvedAdapterConfig
+  ResolvedAdapterConfig,
 } from "../src/core/types.js";
 
 class NoopAdapter implements Adapter {
@@ -20,7 +20,7 @@ class NoopAdapter implements Adapter {
 
   constructor(
     readonly id: AdapterId,
-    private readonly alias: AdapterAlias
+    private readonly alias: AdapterAlias,
   ) {}
 
   async checkAvailability(): Promise<AdapterAvailability> {
@@ -29,7 +29,7 @@ class NoopAdapter implements Adapter {
       adapter: this.id,
       enabled: true,
       available: true,
-      reason: null
+      reason: null,
     };
   }
 
@@ -43,7 +43,7 @@ class NoopAdapter implements Adapter {
       cachedInputTokens: null,
       outputText: "ok",
       thinkingText: null,
-      outputTokens: 1
+      outputTokens: 1,
     };
   }
 }
@@ -56,7 +56,9 @@ class MockCodexAppServerAdapter extends NoopAdapter {
     super("codex-app-server", "codex-app-server");
   }
 
-  override async generate(input: AdapterGenerateInput): Promise<AdapterGenerateResult> {
+  override async generate(
+    input: AdapterGenerateInput,
+  ): Promise<AdapterGenerateResult> {
     this.lastUserPrompt = input.userPrompt;
     this.lastSystemPrompt = input.systemPrompt ?? null;
     this.lastThinking = input.options.thinking;
@@ -70,7 +72,7 @@ class MockCodexAppServerAdapter extends NoopAdapter {
         cachedInputTokens: 7,
         outputText: "seeded",
         thinkingText: null,
-        outputTokens: 2
+        outputTokens: 2,
       };
     }
 
@@ -79,7 +81,7 @@ class MockCodexAppServerAdapter extends NoopAdapter {
       cachedInputTokens: null,
       outputText: "normal",
       thinkingText: null,
-      outputTokens: 2
+      outputTokens: 2,
     };
   }
 }
@@ -94,8 +96,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qodex",
-      args: []
-    }
+      args: [],
+    },
   },
   "codex-app-server": {
     alias: "codex-app-server",
@@ -106,8 +108,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qodex-app-server",
-      args: []
-    }
+      args: [],
+    },
   },
   gemini: {
     alias: "gemini",
@@ -118,8 +120,8 @@ const adapterConfigs = {
     transport: {
       kind: "command",
       program: "/tmp/qgemini",
-      args: []
-    }
+      args: [],
+    },
   },
   "gemma4-e2b": {
     alias: "gemma4-e2b",
@@ -130,8 +132,8 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "10m"
-    }
+      defaultKeepAlive: "1m",
+    },
   },
   "gemma4-e4b": {
     alias: "gemma4-e4b",
@@ -142,15 +144,15 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "10m"
-    }
-  }
+      defaultKeepAlive: "1m",
+    },
+  },
 } satisfies Record<AdapterAlias, ResolvedAdapterConfig>;
 
 function createRegistry(
   codexAppServerAdapter: MockCodexAppServerAdapter,
   codexAdapter = new NoopAdapter("codex", "codex"),
-  ollamaAdapter = new NoopAdapter("ollama", "gemma4-e2b")
+  ollamaAdapter = new NoopAdapter("ollama", "gemma4-e2b"),
 ): AdapterRegistry {
   return {
     adapters: new Map<AdapterAlias, Adapter>([
@@ -158,10 +160,10 @@ function createRegistry(
       ["codex-app-server", codexAppServerAdapter],
       ["gemini", new NoopAdapter("gemini", "gemini")],
       ["gemma4-e2b", ollamaAdapter],
-      ["gemma4-e4b", new NoopAdapter("ollama", "gemma4-e4b")]
+      ["gemma4-e4b", new NoopAdapter("ollama", "gemma4-e4b")],
     ]),
     health: async () => [],
-    close: async () => undefined
+    close: async () => undefined,
   };
 }
 
@@ -172,10 +174,10 @@ test("codex app-server generate with systemPrompt uses cached path and exposes c
       host: "127.0.0.1",
       port: 4317,
       requestTimeoutMs: 120000,
-      skipAliases: []
+      skipAliases: [],
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(codexAppServerAdapter)
+    adapterRegistry: createRegistry(codexAppServerAdapter),
   });
 
   const response = await server.inject({
@@ -184,12 +186,15 @@ test("codex app-server generate with systemPrompt uses cached path and exposes c
     payload: {
       model: "codex-app-server",
       systemPrompt: "shared instructions",
-      userPrompt: "document payload"
-    }
+      userPrompt: "document payload",
+    },
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(codexAppServerAdapter.lastCachedSystemPrompt, "shared instructions");
+  assert.equal(
+    codexAppServerAdapter.lastCachedSystemPrompt,
+    "shared instructions",
+  );
   assert.equal(codexAppServerAdapter.lastCachedUserPrompt, "document payload");
   assert.equal(codexAppServerAdapter.lastUserPrompt, "document payload");
   assert.equal(response.json().cachedInputTokens, 7);
@@ -205,10 +210,10 @@ test("codex app-server generate without systemPrompt uses one-off path", async (
       host: "127.0.0.1",
       port: 4317,
       requestTimeoutMs: 120000,
-      skipAliases: []
+      skipAliases: [],
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(codexAppServerAdapter)
+    adapterRegistry: createRegistry(codexAppServerAdapter),
   });
 
   const response = await server.inject({
@@ -216,8 +221,8 @@ test("codex app-server generate without systemPrompt uses one-off path", async (
     url: "/v1/generate",
     payload: {
       model: "codex-app-server",
-      userPrompt: "document payload"
-    }
+      userPrompt: "document payload",
+    },
   });
 
   assert.equal(response.statusCode, 200);
@@ -235,10 +240,13 @@ test("codex generate still uses normal prompt assembly when systemPrompt is pres
       host: "127.0.0.1",
       port: 4317,
       requestTimeoutMs: 120000,
-      skipAliases: []
+      skipAliases: [],
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(new MockCodexAppServerAdapter(), codexAdapter)
+    adapterRegistry: createRegistry(
+      new MockCodexAppServerAdapter(),
+      codexAdapter,
+    ),
   });
 
   const response = await server.inject({
@@ -247,8 +255,8 @@ test("codex generate still uses normal prompt assembly when systemPrompt is pres
     payload: {
       model: "codex",
       systemPrompt: "shared instructions",
-      userPrompt: "document payload"
-    }
+      userPrompt: "document payload",
+    },
   });
 
   assert.equal(response.statusCode, 200);
@@ -265,10 +273,14 @@ test("generate accepts options.thinking and exposes thinkingText", async () => {
       host: "127.0.0.1",
       port: 4317,
       requestTimeoutMs: 120000,
-      skipAliases: []
+      skipAliases: [],
     },
     adapterConfigs,
-    adapterRegistry: createRegistry(new MockCodexAppServerAdapter(), new NoopAdapter("codex", "codex"), ollamaAdapter)
+    adapterRegistry: createRegistry(
+      new MockCodexAppServerAdapter(),
+      new NoopAdapter("codex", "codex"),
+      ollamaAdapter,
+    ),
   });
 
   const response = await server.inject({
@@ -278,9 +290,9 @@ test("generate accepts options.thinking and exposes thinkingText", async () => {
       model: "gemma4-e2b",
       userPrompt: "document payload",
       options: {
-        thinking: true
-      }
-    }
+        thinking: true,
+      },
+    },
   });
 
   assert.equal(response.statusCode, 200);

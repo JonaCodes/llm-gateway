@@ -29,9 +29,7 @@
       "adapter": "gemini",
       "enabled": true,
       "defaultProviderModel": "gemini-3.1-flash-lite-preview",
-      "fallbackProviderModels": [
-        "gemini-3-flash-preview"
-      ],
+      "fallbackProviderModels": ["gemini-3-flash-preview"],
       "transport": {
         "kind": "command",
         "program": "bin/qgemini",
@@ -47,7 +45,7 @@
       "transport": {
         "kind": "http",
         "baseUrl": "http://127.0.0.1:11434",
-        "defaultKeepAlive": "10m"
+        "defaultKeepAlive": "1m"
       }
     },
     "gemma4-e4b": {
@@ -59,7 +57,7 @@
       "transport": {
         "kind": "http",
         "baseUrl": "http://127.0.0.1:11434",
-        "defaultKeepAlive": "10m"
+        "defaultKeepAlive": "1m"
       }
     }
   }
