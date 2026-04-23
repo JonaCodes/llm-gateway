@@ -15,7 +15,8 @@ export async function createServer(options: CreateServerOptions) {
   const server = Fastify({
     logger: {
       level: "info"
-    }
+    },
+    disableRequestLogging: true
   });
 
   server.addHook("onClose", async () => {

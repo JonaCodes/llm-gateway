@@ -61,7 +61,7 @@ curl -s http://127.0.0.1:4317/v1/generate \
 
 For `codex-app-server`, repeated requests with the same `systemPrompt + providerModel` automatically reuse the same internal seed. In practice, **the first request does not always show a cache hit**, but follow-up requests often do. Check `cachedInputTokens` in the response rather than assuming every request will report reuse identically.
 
-For Gemma 4 on Ollama, v1 cache behavior is intentionally narrower: the server keeps the model warm via Ollama `keep_alive`, but does not claim prompt-prefix reuse accounting. Gemma responses therefore return `cachedInputTokens: null`.
+For Gemma 4 on Ollama, v1 cache behavior is intentionally narrower: the server keeps the model warm via Ollama `keep_alive` for 3 minutes by default, but does not claim prompt-prefix reuse accounting. Gemma responses therefore return `cachedInputTokens: null`.
 
 Default no-thinking example:
 
@@ -149,6 +149,8 @@ node dist/src/server.js --skip-gemini
 node dist/src/server.js --skip-codex
 node dist/src/server.js --skip-codex-app-server
 ```
+
+Operationally, request logging is intentionally lean: the server logs generate start/complete/fail events with a short prompt preview and size counters, and Ollama requests emit timing fields for load, prompt eval, and eval durations.
 
 ## Read Next
 

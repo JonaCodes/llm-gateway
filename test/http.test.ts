@@ -132,7 +132,7 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "1m",
+      defaultKeepAlive: "3m",
     },
   },
   "gemma4-e4b": {
@@ -144,7 +144,7 @@ const adapterConfigs = {
     transport: {
       kind: "http",
       baseUrl: "http://127.0.0.1:11434",
-      defaultKeepAlive: "1m",
+      defaultKeepAlive: "3m",
     },
   },
 } satisfies Record<AdapterAlias, ResolvedAdapterConfig>;

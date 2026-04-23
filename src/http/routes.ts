@@ -12,7 +12,7 @@ import { requireAdapter, resolveEffectiveModelSelection } from "../core/router.j
 import type { AdapterRegistry } from "../core/adapters.js";
 import type { AdapterAlias, GenerateRequest } from "../core/types.js";
 import type { ResolvedAdapterConfig } from "../config/adapters.js";
-import { createRequestId, sendAppError, toUnexpectedAppError } from "./route-helpers.js";
+import { createPromptPreview, createRequestId, sendAppError, toUnexpectedAppError } from "./route-helpers.js";
 import { generateRequestSchema } from "./schemas.js";
 
 interface RegisterRoutesOptions {
@@ -46,26 +46,30 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
 
     const body: GenerateRequest = parsed.data;
     const requestId = createRequestId();
-    const requestLogger = request.log.child({
-      requestId,
-      route: GENERATE_ROUTE,
-      model: body.model
-    });
+    const promptPreview = createPromptPreview(body.userPrompt);
+    const systemPromptChars = body.systemPrompt?.length ?? 0;
+    const userPromptChars = body.userPrompt.length;
 
     try {
-      requestLogger.info(
-        {
-          hasSystemPrompt: Boolean(body.systemPrompt && body.systemPrompt.trim() !== ""),
-          hasProviderModelOverride: Boolean(body.providerModel && body.providerModel.trim() !== ""),
-          thinking: body.options?.thinking ?? false
-        },
-        "Received generation request"
-      );
-
       const selection = resolveEffectiveModelSelection(body, {
         adapterConfigs: options.adapterConfigs
       });
+      const requestLogger = request.log.child({
+        route: GENERATE_ROUTE,
+        model: selection.alias,
+        adapter: selection.adapterId,
+        providerModel: selection.providerModel
+      });
       const adapter = requireAdapter(options.adapterRegistry.adapters, selection);
+      requestLogger.info(
+        {
+          thinking: body.options?.thinking ?? false,
+          promptPreview,
+          userPromptChars,
+          systemPromptChars
+        },
+        "Generate start"
+      );
       const startedAt = performance.now();
       const result = await adapter.generate({
         userPrompt: body.userPrompt,
@@ -76,23 +80,21 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
         options: {
           thinking: body.options?.thinking ?? false
         },
-        logger: requestLogger.child({
-          adapter: selection.adapterId,
-          providerModel: selection.providerModel
-        })
+        logger: requestLogger
       });
       const durationMs = Math.round(performance.now() - startedAt);
 
       requestLogger.info(
         {
-          adapter: selection.adapterId,
-          providerModel: selection.providerModel,
           durationMs,
           inputTokens: result.inputTokens,
           cachedInputTokens: result.cachedInputTokens,
-          outputTokens: result.outputTokens
+          outputTokens: result.outputTokens,
+          outputChars: result.outputText.length,
+          thinkingChars: result.thinkingText?.length ?? 0,
+          promptPreview
         },
-        "Generation request completed"
+        "Generate complete"
       );
 
       return reply.type(CONTENT_TYPE_JSON).send({
@@ -108,23 +110,33 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
         adapter: selection.adapterId
       });
     } catch (error) {
+      const requestLogger = request.log.child({
+        route: GENERATE_ROUTE,
+        model: body.model
+      });
       if (error instanceof AppError) {
         requestLogger.error(
           {
             code: error.code,
             statusCode: error.statusCode,
+            promptPreview,
+            userPromptChars,
+            systemPromptChars,
             details: error.details
           },
-          "Generation request failed"
+          "Generate failed"
         );
         return sendAppError(reply, error);
       }
 
       requestLogger.error(
         {
+          promptPreview,
+          userPromptChars,
+          systemPromptChars,
           error: error instanceof Error ? error.message : error
         },
-        "Generation request failed unexpectedly"
+        "Generate failed unexpectedly"
       );
       return sendAppError(reply, toUnexpectedAppError(error));
     }

@@ -30,3 +30,13 @@ export function toUnexpectedAppError(error: unknown): AppError {
     details: error instanceof Error ? error.message : error
   });
 }
+
+export function createPromptPreview(value: string, maxLength = 30): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength)}...`;
+}

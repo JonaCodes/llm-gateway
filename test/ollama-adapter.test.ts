@@ -16,7 +16,7 @@ const adapterConfig: ResolvedAdapterConfig = {
   transport: {
     kind: "http",
     baseUrl: "http://127.0.0.1:11434",
-    defaultKeepAlive: "1m",
+    defaultKeepAlive: "3m",
   },
 };
 
@@ -96,7 +96,7 @@ test("ollama generate maps token counts and omits thinking text by default", asy
     assert.equal(result.outputTokens, 4);
     assert.equal(result.cachedInputTokens, null);
     assert.equal(requests[0]?.url, "http://127.0.0.1:11434/api/chat");
-    assert.equal(requests[0]?.body?.keep_alive, "1m");
+    assert.equal(requests[0]?.body?.keep_alive, "3m");
     assert.equal(requests[0]?.body?.think, false);
   } finally {
     globalThis.fetch = originalFetch;

@@ -60,6 +60,7 @@ export class OllamaClient {
       timeoutMs: input.timeoutMs,
       logger: input.logger,
       operation: "ollama-chat",
+      model: input.model,
       body: {
         model: input.model,
         messages: buildMessages(input.userPrompt, input.systemPrompt),
@@ -96,6 +97,7 @@ export class OllamaClient {
     readonly timeoutMs: number;
     readonly logger?: AppLogger;
     readonly operation: string;
+    readonly model?: string;
     readonly body?: unknown;
   }): Promise<T> {
     const controller = new AbortController();
@@ -104,15 +106,6 @@ export class OllamaClient {
     const url = `${transport.baseUrl}${input.path}`;
 
     try {
-      input.logger?.info(
-        {
-          operation: input.operation,
-          url,
-          timeoutMs: input.timeoutMs
-        },
-        "Starting Ollama request"
-      );
-
       const response = await fetch(url, {
         method: input.method,
         headers: {
@@ -144,14 +137,20 @@ export class OllamaClient {
         });
       }
 
-      input.logger?.info(
-        {
-          operation: input.operation,
-          url,
-          status: response.status
-        },
-        "Ollama request completed"
-      );
+      if (input.operation === "ollama-chat" && isRecord(parsed)) {
+        input.logger?.info(
+          {
+            model: input.model ?? null,
+            totalDurationMs: toMilliseconds(parsed.total_duration),
+            loadDurationMs: toMilliseconds(parsed.load_duration),
+            promptEvalDurationMs: toMilliseconds(parsed.prompt_eval_duration),
+            evalDurationMs: toMilliseconds(parsed.eval_duration),
+            inputTokens: toNullableNumber(parsed.prompt_eval_count),
+            outputTokens: toNullableNumber(parsed.eval_count)
+          },
+          "Ollama timings"
+        );
+      }
 
       return parsed as T;
     } catch (error) {
@@ -201,4 +200,14 @@ function buildMessages(userPrompt: string, systemPrompt?: string) {
 
 function extractNullableText(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+function toMilliseconds(value: unknown): number | null {
+  const duration = toNullableNumber(value);
+
+  if (duration === null) {
+    return null;
+  }
+
+  return Math.round(duration / 1_000_000);
 }
