@@ -3,8 +3,7 @@ import { CodexAdapter } from "../adapters/codex/index.js";
 import { CodexAppServerAdapter } from "../adapters/codex-app-server/index.js";
 import { GeminiAdapter } from "../adapters/gemini/index.js";
 import { OllamaAdapter } from "../adapters/ollama/index.js";
-import { ADAPTER_SKIP_FLAGS, ERROR_CODE_STARTUP } from "../config/constants.js";
-import { AppError } from "./errors.js";
+import { ADAPTER_SKIP_FLAGS } from "../config/constants.js";
 
 export interface AdapterRegistry {
   readonly adapters: ReadonlyMap<AdapterAlias, Adapter>;
@@ -79,18 +78,5 @@ function createAdapter(config: ResolvedAdapterConfig): Adapter {
       return new GeminiAdapter(config);
     case "ollama":
       return new OllamaAdapter(config);
-  }
-}
-
-export async function assertStartupHealth(registry: AdapterRegistry): Promise<void> {
-  const health = await registry.health();
-  const unavailable = health.filter((entry) => entry.enabled && !entry.available);
-
-  if (unavailable.length > 0) {
-    throw new AppError("One or more adapters failed startup health checks", {
-      statusCode: 503,
-      code: ERROR_CODE_STARTUP,
-      details: unavailable
-    });
   }
 }

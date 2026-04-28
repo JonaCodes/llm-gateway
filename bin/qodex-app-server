@@ -3,6 +3,11 @@
 set -euo pipefail
 
 readonly DEFAULT_CODEX_HOME="${CODEX_APP_SERVER_HOME:-${CODEX_MIN_HOME:-$HOME/.codex-min}}"
+readonly SCRIPT_DIR="${0:A:h}"
+
+source "$SCRIPT_DIR/lib/bootstrap-fast-cli-env.zsh"
+
+ensure_codex_min_home || exit 1
 
 export CODEX_HOME="$DEFAULT_CODEX_HOME"
 exec codex app-server --listen stdio:// "$@"

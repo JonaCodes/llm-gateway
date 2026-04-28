@@ -5,17 +5,18 @@ set -euo pipefail
 readonly HEALTHCHECK_FLAG="--healthcheck"
 readonly DEFAULT_CODEX_HOME="$HOME/.codex-min"
 readonly DEFAULT_WORKDIR="/tmp"
+readonly SCRIPT_DIR="${0:A:h}"
+
+source "$SCRIPT_DIR/lib/bootstrap-fast-cli-env.zsh"
 
 fail() {
   print -u2 -- "$1"
   exit 1
 }
 
-if [[ "${1:-}" == "$HEALTHCHECK_FLAG" ]]; then
-  command -v codex >/dev/null 2>&1 || fail "codex executable not found on PATH"
+ensure_codex_min_home || exit 1
 
-  codex_home="${CODEX_MIN_HOME:-$DEFAULT_CODEX_HOME}"
-  [[ -d "$codex_home" ]] || fail "Codex home directory not found: $codex_home"
+if [[ "${1:-}" == "$HEALTHCHECK_FLAG" ]]; then
   exit 0
 fi
 

@@ -2,7 +2,7 @@ import { cwd } from "node:process";
 
 import { loadAdapterConfigs } from "./config/adapters.js";
 import { loadRuntimeConfig, parseStartupOptions } from "./config/runtime.js";
-import { buildAdapterRegistry, assertStartupHealth } from "./core/adapters.js";
+import { buildAdapterRegistry } from "./core/adapters.js";
 import { createServer } from "./http/server.js";
 
 async function main(): Promise<void> {
@@ -11,8 +11,6 @@ async function main(): Promise<void> {
   const runtimeConfig = loadRuntimeConfig(process.env, startupOptions);
   const adapterConfigs = loadAdapterConfigs(projectRoot);
   const adapterRegistry = buildAdapterRegistry(adapterConfigs, runtimeConfig.skipAliases);
-
-  await assertStartupHealth(adapterRegistry);
 
   const server = await createServer({
     runtimeConfig,
