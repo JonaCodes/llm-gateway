@@ -30,7 +30,7 @@ async function main(): Promise<void> {
       requestTimeoutMs: runtimeConfig.requestTimeoutMs,
       skipAliases: runtimeConfig.skipAliases
     },
-    "local-llms listening"
+    "llm-gateway listening"
   );
 }
 

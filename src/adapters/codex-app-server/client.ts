@@ -180,7 +180,7 @@ export class CodexAppServerClient {
         INITIALIZE_METHOD,
         {
           clientInfo: {
-            name: "local-llms",
+            name: "llm-gateway",
             version: "0.1.0"
           },
           capabilities: null
