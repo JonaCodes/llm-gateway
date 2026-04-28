@@ -1,6 +1,6 @@
 # llm-gateway
 
-`llm-gateway` is a local HTTP server for LLM backends reachable from your machine, including local Ollama models and subscription-backed CLIs like Codex and Gemini.
+`llm-gateway` is a local HTTP server for LLM backends reachable from your machine, including local ollama models and subscription-backed CLIs like Codex and Gemini.
 
 # Why I built this
 
@@ -8,9 +8,11 @@ When developing locally, I don't want to burn real money on testing. But I _do_ 
 
 So I made this to expose the CLI-based LLMs as a local HTTP service. Then I added support for local models as well, because it made sense to unify that.
 
-## Note
+## Human note
 
 Everything except for the section above and this note is, obviously, LLM-generated. It's not pretending to be a super-production project. It is literally for local dev.
+
+That said, I did my best to set the project up in a way that will be easy for you/your coding agent to set up, such as the hearty [docs](docs) you can unleash your agent on to expand on this project as you wish.
 
 Enjoy シ
 
@@ -30,8 +32,6 @@ The server listens on `http://127.0.0.1:4317`.
 - `codex` must be installed and logged in once if you want Codex routes
 - `gemini` must be installed and logged in once if you want Gemini routes
 - Ollama must be installed locally if you want Ollama-backed models
-
-The repo-owned `qodex`, `qodex-app-server`, and `qgemini` wrappers bootstrap their lean minimal-home setup automatically on first use.
 
 ## Request Shape
 
@@ -77,7 +77,7 @@ Supported message roles:
 
 ## Notes
 
-- Ollama-backed models support `options.thinking`
+- Ollama-backed models support `options.thinking` (set to false for quicker responses)
 - `codex-app-server` is the main optimization path when many requests share the same system prompt
 - `/health` reports adapter availability
 

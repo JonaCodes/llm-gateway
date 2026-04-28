@@ -4,7 +4,7 @@
 
 ## Why use it
 
-- Keeps one-off questions lightweight.
+- Keeps one-off questions lightweight (~2s response vs 6-10s on M4 Mac with 16GB RAM).
 - Avoids loading your normal Codex skills, plugins, memories, and prompt scaffolding.
 - Leaves normal `codex` behavior unchanged.
 
