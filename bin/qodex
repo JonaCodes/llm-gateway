@@ -9,11 +9,6 @@ readonly SCRIPT_DIR="${0:A:h}"
 
 source "$SCRIPT_DIR/lib/bootstrap-fast-cli-env.zsh"
 
-fail() {
-  print -u2 -- "$1"
-  exit 1
-}
-
 ensure_codex_min_home || exit 1
 
 if [[ "${1:-}" == "$HEALTHCHECK_FLAG" ]]; then

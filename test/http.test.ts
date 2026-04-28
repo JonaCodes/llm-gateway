@@ -123,6 +123,30 @@ const adapterConfigs = {
       args: [],
     },
   },
+  gemma: {
+    alias: "gemma",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e2b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "3m",
+    },
+  },
+  ollama: {
+    alias: "ollama",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e2b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "3m",
+    },
+  },
   "gemma4-e2b": {
     alias: "gemma4-e2b",
     adapter: "ollama",
@@ -159,6 +183,8 @@ function createRegistry(
       ["codex", codexAdapter],
       ["codex-app-server", codexAppServerAdapter],
       ["gemini", new NoopAdapter("gemini", "gemini")],
+      ["gemma", new NoopAdapter("ollama", "gemma")],
+      ["ollama", new NoopAdapter("ollama", "ollama")],
       ["gemma4-e2b", ollamaAdapter],
       ["gemma4-e4b", new NoopAdapter("ollama", "gemma4-e4b")],
     ]),
@@ -185,8 +211,10 @@ test("codex app-server generate with systemPrompt uses cached path and exposes c
     url: "/v1/generate",
     payload: {
       model: "codex-app-server",
-      systemPrompt: "shared instructions",
-      userPrompt: "document payload",
+      messages: [
+        { role: "system", content: "shared instructions" },
+        { role: "user", content: "document payload" },
+      ],
     },
   });
 
@@ -221,7 +249,7 @@ test("codex app-server generate without systemPrompt uses one-off path", async (
     url: "/v1/generate",
     payload: {
       model: "codex-app-server",
-      userPrompt: "document payload",
+      messages: [{ role: "user", content: "document payload" }],
     },
   });
 
@@ -254,8 +282,10 @@ test("codex generate still uses normal prompt assembly when systemPrompt is pres
     url: "/v1/generate",
     payload: {
       model: "codex",
-      systemPrompt: "shared instructions",
-      userPrompt: "document payload",
+      messages: [
+        { role: "system", content: "shared instructions" },
+        { role: "user", content: "document payload" },
+      ],
     },
   });
 
@@ -288,7 +318,7 @@ test("generate accepts options.thinking and exposes thinkingText", async () => {
     url: "/v1/generate",
     payload: {
       model: "gemma4-e2b",
-      userPrompt: "document payload",
+      messages: [{ role: "user", content: "document payload" }],
       options: {
         thinking: true,
       },
@@ -298,6 +328,39 @@ test("generate accepts options.thinking and exposes thinkingText", async () => {
   assert.equal(response.statusCode, 200);
   assert.equal(ollamaAdapter.lastThinking, true);
   assert.equal(response.json().thinkingText, null);
+
+  await server.close();
+});
+
+test("generate rejects system messages after user messages", async () => {
+  const server = await createServer({
+    runtimeConfig: {
+      host: "127.0.0.1",
+      port: 4317,
+      requestTimeoutMs: 120000,
+      skipAliases: [],
+    },
+    adapterConfigs,
+    adapterRegistry: createRegistry(new MockCodexAppServerAdapter()),
+  });
+
+  const response = await server.inject({
+    method: "POST",
+    url: "/v1/generate",
+    payload: {
+      model: "codex",
+      messages: [
+        { role: "user", content: "document payload" },
+        { role: "system", content: "shared instructions" },
+      ],
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(
+    response.json().error.message,
+    "System messages must come before user messages",
+  );
 
   await server.close();
 });

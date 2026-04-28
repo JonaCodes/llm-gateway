@@ -1,10 +1,13 @@
 import { z } from "zod";
 
+const generateRequestMessageSchema = z.object({
+  role: z.enum(["system", "user"]),
+  content: z.string().min(1)
+});
+
 export const generateRequestSchema = z.object({
-  model: z.enum(["codex", "codex-app-server", "gemini", "gemma4-e2b", "gemma4-e4b"]),
-  userPrompt: z.string().min(1),
-  systemPrompt: z.string().optional(),
-  providerModel: z.string().min(1).optional(),
+  model: z.string().min(1),
+  messages: z.array(generateRequestMessageSchema).min(1),
   options: z.object({
     thinking: z.boolean().optional()
   }).optional()

@@ -24,13 +24,14 @@ export const ERROR_CODE_VALIDATION = "validation_error";
 export const ERROR_CODE_NOT_FOUND = "not_found";
 export const ERROR_CODE_ADAPTER_UNAVAILABLE = "adapter_unavailable";
 export const ERROR_CODE_ADAPTER_EXECUTION = "adapter_execution_failed";
-export const ERROR_CODE_STARTUP = "startup_error";
 export const ERROR_CODE_INTERNAL = "internal_error";
 
 export const ADAPTER_SKIP_FLAGS = {
   codex: "--skip-codex",
   "codex-app-server": "--skip-codex-app-server",
   gemini: "--skip-gemini",
+  gemma: "--skip-gemma",
+  ollama: "--skip-ollama",
   "gemma4-e2b": "--skip-gemma4-e2b",
   "gemma4-e4b": "--skip-gemma4-e4b"
 } as const;

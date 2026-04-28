@@ -47,6 +47,30 @@ const adapterConfigs = {
       args: [],
     },
   },
+  gemma: {
+    alias: "gemma",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e2b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "3m",
+    },
+  },
+  ollama: {
+    alias: "ollama",
+    adapter: "ollama",
+    enabled: true,
+    defaultProviderModel: "gemma4:e2b",
+    fallbackProviderModels: [],
+    transport: {
+      kind: "http",
+      baseUrl: "http://127.0.0.1:11434",
+      defaultKeepAlive: "3m",
+    },
+  },
   "gemma4-e2b": {
     alias: "gemma4-e2b",
     adapter: "ollama",
@@ -88,7 +112,7 @@ test("resolveEffectiveModelSelection uses adapter default model", () => {
   const selection = resolveEffectiveModelSelection(
     {
       model: "codex",
-      userPrompt: "classify this",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
@@ -101,7 +125,7 @@ test("resolveEffectiveModelSelection uses codex app-server default model", () =>
   const selection = resolveEffectiveModelSelection(
     {
       model: "codex-app-server",
-      userPrompt: "classify this",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
@@ -113,9 +137,8 @@ test("resolveEffectiveModelSelection uses codex app-server default model", () =>
 test("resolveEffectiveModelSelection prefers request override", () => {
   const selection = resolveEffectiveModelSelection(
     {
-      model: "gemini",
-      userPrompt: "classify this",
-      providerModel: "gemini-2.5-flash",
+      model: "gemini/gemini-2.5-flash",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
@@ -127,7 +150,7 @@ test("resolveEffectiveModelSelection uses configured Gemini default and fallback
   const selection = resolveEffectiveModelSelection(
     {
       model: "gemini",
-      userPrompt: "classify this",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
@@ -142,7 +165,7 @@ test("resolveEffectiveModelSelection maps Gemma alias to Ollama adapter", () => 
   const selection = resolveEffectiveModelSelection(
     {
       model: "gemma4-e2b",
-      userPrompt: "classify this",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
@@ -154,14 +177,69 @@ test("resolveEffectiveModelSelection maps Gemma alias to Ollama adapter", () => 
 test("resolveEffectiveModelSelection suppresses fallback models for explicit overrides", () => {
   const selection = resolveEffectiveModelSelection(
     {
-      model: "gemini",
-      userPrompt: "classify this",
-      providerModel: "gemini-3-flash-preview",
+      model: "gemini/gemini-3-flash-preview",
+      messages: [{ role: "user", content: "classify this" }],
     },
     { adapterConfigs },
   );
 
   assert.equal(selection.providerModel, "gemini-3-flash-preview");
+  assert.deepEqual(selection.fallbackProviderModels, []);
+});
+
+test("resolveEffectiveModelSelection accepts raw Codex provider models", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "gpt-5.2",
+      messages: [{ role: "user", content: "classify this" }],
+    },
+    { adapterConfigs },
+  );
+
+  assert.equal(selection.alias, "codex");
+  assert.equal(selection.providerModel, "gpt-5.2");
+  assert.deepEqual(selection.fallbackProviderModels, []);
+});
+
+test("resolveEffectiveModelSelection accepts raw Gemini provider models", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "gemini-3.1-flash-lite-preview",
+      messages: [{ role: "user", content: "classify this" }],
+    },
+    { adapterConfigs },
+  );
+
+  assert.equal(selection.alias, "gemini");
+  assert.equal(selection.providerModel, "gemini-3.1-flash-lite-preview");
+  assert.deepEqual(selection.fallbackProviderModels, []);
+});
+
+test("resolveEffectiveModelSelection accepts generic Gemma alias", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "gemma",
+      messages: [{ role: "user", content: "classify this" }],
+    },
+    { adapterConfigs },
+  );
+
+  assert.equal(selection.alias, "gemma");
+  assert.equal(selection.providerModel, "gemma4:e2b");
+});
+
+test("resolveEffectiveModelSelection accepts raw Ollama provider models", () => {
+  const selection = resolveEffectiveModelSelection(
+    {
+      model: "gemma4:e2b",
+      messages: [{ role: "user", content: "classify this" }],
+    },
+    { adapterConfigs },
+  );
+
+  assert.equal(selection.alias, "ollama");
+  assert.equal(selection.adapterId, "ollama");
+  assert.equal(selection.providerModel, "gemma4:e2b");
   assert.deepEqual(selection.fallbackProviderModels, []);
 });
 

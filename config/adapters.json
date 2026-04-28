@@ -36,6 +36,30 @@
         "args": []
       }
     },
+    "gemma": {
+      "alias": "gemma",
+      "adapter": "ollama",
+      "enabled": true,
+      "defaultProviderModel": "gemma4:e2b",
+      "fallbackProviderModels": [],
+      "transport": {
+        "kind": "http",
+        "baseUrl": "http://127.0.0.1:11434",
+        "defaultKeepAlive": "3m"
+      }
+    },
+    "ollama": {
+      "alias": "ollama",
+      "adapter": "ollama",
+      "enabled": true,
+      "defaultProviderModel": "gemma4:e2b",
+      "fallbackProviderModels": [],
+      "transport": {
+        "kind": "http",
+        "baseUrl": "http://127.0.0.1:11434",
+        "defaultKeepAlive": "3m"
+      }
+    },
     "gemma4-e2b": {
       "alias": "gemma4-e2b",
       "adapter": "ollama",

@@ -11,22 +11,101 @@ export function resolveEffectiveModelSelection(
   request: GenerateRequest,
   options: ResolveModelOptions
 ): EffectiveModelSelection {
-  const adapterConfig = options.adapterConfigs[request.model];
+  const parsedRequestModel = parseRequestModel(request.model);
+  const aliasSelection = parsedRequestModel.alias
+    ? resolveAliasSelection(parsedRequestModel.alias, parsedRequestModel.providerModel, options.adapterConfigs)
+    : null;
+
+  if (aliasSelection) {
+    return aliasSelection;
+  }
+
+  const inferredSelection = resolveInferredSelection(parsedRequestModel.rawModel, options.adapterConfigs);
+  if (inferredSelection) {
+    return inferredSelection;
+  }
+
+  throw new AppError(`Model '${request.model}' is not available`, {
+    statusCode: 404,
+    code: ERROR_CODE_NOT_FOUND
+  });
+}
+
+function resolveAliasSelection(
+  alias: string,
+  providerModelOverride: string | null,
+  adapterConfigs: Record<AdapterAlias, ResolvedAdapterConfig>
+): EffectiveModelSelection | null {
+  const adapterConfig = adapterConfigs[alias as AdapterAlias];
 
   if (!adapterConfig || !adapterConfig.enabled) {
-    throw new AppError(`Model '${request.model}' is not available`, {
-      statusCode: 404,
-      code: ERROR_CODE_NOT_FOUND
-    });
+    return null;
   }
 
   return {
     alias: adapterConfig.alias,
     adapterId: adapterConfig.adapter,
-    providerModel: request.providerModel?.trim() || adapterConfig.defaultProviderModel,
-    fallbackProviderModels: request.providerModel?.trim() ? [] : adapterConfig.fallbackProviderModels,
+    providerModel: providerModelOverride ?? adapterConfig.defaultProviderModel,
+    fallbackProviderModels: providerModelOverride ? [] : adapterConfig.fallbackProviderModels,
     adapterConfig
   };
+}
+
+function resolveInferredSelection(
+  model: string,
+  adapterConfigs: Record<AdapterAlias, ResolvedAdapterConfig>
+): EffectiveModelSelection | null {
+  if (looksLikeCodexProviderModel(model)) {
+    return resolveAliasSelection("codex", model, adapterConfigs);
+  }
+
+  if (looksLikeGeminiProviderModel(model)) {
+    return resolveAliasSelection("gemini", model, adapterConfigs);
+  }
+
+  if (looksLikeOllamaProviderModel(model)) {
+    return resolveAliasSelection("ollama", model, adapterConfigs);
+  }
+
+  return null;
+}
+
+function parseRequestModel(value: string): {
+  readonly rawModel: string;
+  readonly alias: string | null;
+  readonly providerModel: string | null;
+} {
+  const normalized = value.trim();
+  const separatorIndex = normalized.indexOf("/");
+
+  if (separatorIndex === -1) {
+    return {
+      rawModel: normalized,
+      alias: normalized,
+      providerModel: null
+    };
+  }
+
+  const alias = normalized.slice(0, separatorIndex).trim();
+  const providerModel = normalized.slice(separatorIndex + 1).trim();
+
+  return {
+    rawModel: normalized,
+    alias: alias === "" ? null : alias,
+    providerModel: providerModel === "" ? null : providerModel
+  };
+}
+
+function looksLikeCodexProviderModel(model: string): boolean {
+  return model.startsWith("gpt-") || /^o\d(?:$|[-:])/.test(model);
+}
+
+function looksLikeGeminiProviderModel(model: string): boolean {
+  return model.startsWith("gemini-");
+}
+
+function looksLikeOllamaProviderModel(model: string): boolean {
+  return model.includes(":");
 }
 
 export function requireAdapter(

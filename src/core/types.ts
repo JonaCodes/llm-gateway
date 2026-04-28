@@ -7,11 +7,14 @@ export interface GenerateRequestOptions {
   readonly thinking?: boolean;
 }
 
+export interface GenerateRequestMessage {
+  readonly role: "system" | "user";
+  readonly content: string;
+}
+
 export interface GenerateRequest {
-  readonly model: AdapterAlias;
-  readonly userPrompt: string;
-  readonly systemPrompt?: string;
-  readonly providerModel?: string;
+  readonly model: string;
+  readonly messages: readonly GenerateRequestMessage[];
   readonly options?: GenerateRequestOptions;
 }
 

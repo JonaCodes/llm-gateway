@@ -10,7 +10,7 @@ import type { RuntimeConfig } from "../config/runtime.js";
 import { AppError } from "../core/errors.js";
 import { requireAdapter, resolveEffectiveModelSelection } from "../core/router.js";
 import type { AdapterRegistry } from "../core/adapters.js";
-import type { AdapterAlias, GenerateRequest } from "../core/types.js";
+import type { AdapterAlias, GenerateRequest, GenerateRequestMessage } from "../core/types.js";
 import type { ResolvedAdapterConfig } from "../config/adapters.js";
 import { createPromptPreview, createRequestId, sendAppError, toUnexpectedAppError } from "./route-helpers.js";
 import { generateRequestSchema } from "./schemas.js";
@@ -45,10 +45,26 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
     }
 
     const body: GenerateRequest = parsed.data;
+    const promptInput = toPromptInput(body.messages);
     const requestId = createRequestId();
-    const promptPreview = createPromptPreview(body.userPrompt);
-    const systemPromptChars = body.systemPrompt?.length ?? 0;
-    const userPromptChars = body.userPrompt.length;
+
+    if ("error" in promptInput) {
+      return reply.status(400).type(CONTENT_TYPE_JSON).send({
+        error: {
+          code: ERROR_CODE_VALIDATION,
+          message: promptInput.error,
+          details: {
+            fieldErrors: {
+              messages: [promptInput.error]
+            }
+          }
+        }
+      });
+    }
+
+    const promptPreview = createPromptPreview(promptInput.userPrompt);
+    const systemPromptChars = promptInput.systemPrompt?.length ?? 0;
+    const userPromptChars = promptInput.userPrompt.length;
 
     try {
       const selection = resolveEffectiveModelSelection(body, {
@@ -72,8 +88,8 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
       );
       const startedAt = performance.now();
       const result = await adapter.generate({
-        userPrompt: body.userPrompt,
-        systemPrompt: body.systemPrompt,
+        userPrompt: promptInput.userPrompt,
+        systemPrompt: promptInput.systemPrompt,
         providerModel: selection.providerModel,
         fallbackProviderModels: selection.fallbackProviderModels,
         timeoutMs: options.runtimeConfig.requestTimeoutMs,
@@ -141,4 +157,41 @@ export async function registerRoutes(server: FastifyInstance, options: RegisterR
       return sendAppError(reply, toUnexpectedAppError(error));
     }
   });
+}
+
+function toPromptInput(messages: readonly GenerateRequestMessage[]): {
+  readonly systemPrompt?: string;
+  readonly userPrompt: string;
+} | {
+  readonly error: string;
+} {
+  const systemParts: string[] = [];
+  const userParts: string[] = [];
+  let seenUserMessage = false;
+
+  for (const message of messages) {
+    if (message.role === "system") {
+      if (seenUserMessage) {
+        return {
+          error: "System messages must come before user messages"
+        };
+      }
+      systemParts.push(message.content);
+      continue;
+    }
+
+    seenUserMessage = true;
+    userParts.push(message.content);
+  }
+
+  if (userParts.length === 0) {
+    return {
+      error: "At least one user message is required"
+    };
+  }
+
+  return {
+    systemPrompt: systemParts.length > 0 ? systemParts.join("\n\n") : undefined,
+    userPrompt: userParts.join("\n\n")
+  };
 }

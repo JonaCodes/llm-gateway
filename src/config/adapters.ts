@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import adaptersJson from "../../config/adapters.json" with { type: "json" };
 
-const adapterAliasSchema = z.enum(["codex", "codex-app-server", "gemini", "gemma4-e2b", "gemma4-e4b"]);
+const adapterAliasSchema = z.enum(["codex", "codex-app-server", "gemini", "gemma", "ollama", "gemma4-e2b", "gemma4-e4b"]);
 const adapterIdSchema = z.enum(["codex", "codex-app-server", "gemini", "ollama"]);
 
 const commandTransportSchema = z.object({
