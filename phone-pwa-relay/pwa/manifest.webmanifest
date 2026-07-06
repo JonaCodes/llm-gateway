@@ -1,0 +1,9 @@
+{
+  "name": "Phone PWA Worker",
+  "short_name": "Phone Worker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#111827",
+  "icons": []
+}

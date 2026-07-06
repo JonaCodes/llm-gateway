@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111827" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Phone PWA Worker</title>
+  </head>
+  <body>
+    <main id="app">
+      <section class="topbar">
+        <div>
+          <h1>Phone Worker</h1>
+          <p id="statusText">Idle</p>
+        </div>
+        <div id="stateBadge" class="badge">offline</div>
+      </section>
+
+      <section class="panel">
+        <label>
+          Relay WebSocket URL
+          <input id="relayUrl" autocomplete="off" placeholder="ws://192.168.1.10:8787/worker" />
+        </label>
+        <div class="grid">
+          <label>
+            Session
+            <input id="sessionId" autocomplete="off" />
+          </label>
+          <label>
+            Token
+            <input id="sessionToken" autocomplete="off" type="password" />
+          </label>
+        </div>
+        <label>
+          WebLLM model id
+          <input id="modelId" autocomplete="off" />
+        </label>
+        <div class="actions">
+          <button id="loadModelButton" type="button">Load model</button>
+          <button id="connectButton" type="button">Connect</button>
+          <button id="disconnectButton" type="button">Disconnect</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Activity</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
